@@ -71,6 +71,11 @@
           <span class="game-pick-name">Doodle-прыжки</span>
           <span class="game-pick-desc">Прыгай по банкам всё выше</span>
         </button>
+        <button class="game-pick" id="pickTTTBtn">
+          <span class="game-pick-emoji">❌⭕</span>
+          <span class="game-pick-name">Крестики-нолики</span>
+          <span class="game-pick-desc">Против бота или онлайн</span>
+        </button>
       </div>
     </div>
   </section>
@@ -278,6 +283,83 @@
     </div>
   </section>
 
+  <!-- ЭКРАН МЕНЮ КРЕСТИКОВ-НОЛИКОВ -->
+  <section id="tttMenuScreen" class="screen hidden">
+    <div class="menu-card">
+      <button class="btn btn-secondary btn-small back-btn" id="tttBackToSelectBtn">⬅ Выбор игры</button>
+      <h1 class="title">❌⭕ Крестики-нолики</h1>
+      <p class="subtitle">Собери три своих знака в ряд — по горизонтали, вертикали или диагонали!</p>
+
+      <div class="clicker-level-pill">
+        <span id="tttLevelEmoji">🎯</span>
+        <div class="clicker-level-text">
+          <span id="tttLevelName">Новичок клеточек</span>
+          <small id="tttLevelNext"></small>
+        </div>
+      </div>
+
+      <h2 style="margin-top:18px;font-size:1.05rem;text-align:center;">Против кого сыграем?</h2>
+      <div class="game-pick-grid" style="margin-top:8px;">
+        <button class="game-pick" id="tttVsBotBtn">
+          <span class="game-pick-emoji">🤖</span>
+          <span class="game-pick-name">Против бота</span>
+          <span class="game-pick-desc">Выбери уровень сложности</span>
+        </button>
+        <button class="game-pick" id="tttVsOnlineBtn">
+          <span class="game-pick-emoji">🌐</span>
+          <span class="game-pick-name">Онлайн</span>
+          <span class="game-pick-desc">Со случайным игроком</span>
+        </button>
+      </div>
+
+      <div id="tttBotDifficultyRow" class="game-pick-grid hidden" style="margin-top:12px;grid-template-columns:repeat(3,1fr);">
+        <button class="game-pick" data-diff="easy">
+          <span class="game-pick-emoji">🥄</span>
+          <span class="game-pick-name">Лёгкий</span>
+        </button>
+        <button class="game-pick" data-diff="medium">
+          <span class="game-pick-emoji">🥫</span>
+          <span class="game-pick-name">Средний</span>
+        </button>
+        <button class="game-pick" data-diff="hard">
+          <span class="game-pick-emoji">👑</span>
+          <span class="game-pick-name">Сложный</span>
+        </button>
+      </div>
+
+      <div class="menu-buttons" style="margin-top:16px;">
+        <button class="btn btn-secondary" id="tttRecordsBtn">🏆 Рекорды</button>
+        <button class="btn btn-secondary" id="tttProfileBtn">🏅 Профиль и достижения</button>
+      </div>
+      <p class="hint" id="tttCloudHint">Онлайн-игра между разными устройствами работает, когда у сайта настроено облако (Firebase). Без него можно сыграть онлайн между двумя вкладками этого браузера.</p>
+    </div>
+  </section>
+
+  <!-- ЭКРАН ИГРЫ КРЕСТИКИ-НОЛИКИ -->
+  <section id="tttGameScreen" class="screen hidden">
+    <div class="hud" id="tttHud">
+      <div class="score-pill" id="tttModePill">🤖 Бот</div>
+      <div class="score-pill" id="tttTurnPill">Ход: ❌</div>
+      <button class="btn btn-small btn-danger" id="tttExitBtn">✖ Выход</button>
+    </div>
+    <div class="ttt-players-row" id="tttPlayersRow">
+      <div class="ttt-player-pill" id="tttPlayerXPill">❌ <span id="tttPlayerXName">Ты</span></div>
+      <div class="ttt-vs">vs</div>
+      <div class="ttt-player-pill" id="tttPlayerOPill">⭕ <span id="tttPlayerOName">Бот</span></div>
+    </div>
+    <div class="ttt-board-wrap">
+      <div class="ttt-board" id="tttBoard"></div>
+      <div id="tttGameOverOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2 id="tttGameOverTitle">🎉 Победа!</h2>
+          <p id="tttGameOverText" class="final-score"></p>
+          <button class="btn btn-primary" id="tttRestartBtn">🔁 Играть снова</button>
+          <button class="btn btn-secondary" id="tttGoMenuBtn">В меню</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <!-- МОДАЛКА: РЕКОРДЫ -->
@@ -428,6 +510,53 @@
   </div>
 </div>
 
+<!-- МОДАЛКА: ПОИСК СОПЕРНИКА (КРЕСТИКИ-НОЛИКИ) -->
+<div class="modal hidden" id="tttSearchModal">
+  <div class="modal-card" style="text-align:center;">
+    <h2>🔎 Ищем соперника…</h2>
+    <p class="modal-note">Подожди немного — как только найдётся другой игрок, партия начнётся автоматически.</p>
+    <div class="ttt-spinner"></div>
+    <button class="btn btn-secondary" id="tttCancelSearchBtn" style="width:100%;margin-top:16px;">Отменить</button>
+  </div>
+</div>
+
+<!-- МОДАЛКА: РЕКОРДЫ КРЕСТИКОВ-НОЛИКОВ -->
+<div class="modal hidden" id="tttRecordsModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="tttRecordsModal">✖</button>
+    <h2>🏆 Рекорды крестиков-ноликов</h2>
+    <p class="modal-note">Рейтинг игроков по количеству побед.</p>
+    <ol class="records-list" id="tttRecordsList"></ol>
+  </div>
+</div>
+
+<!-- МОДАЛКА: ПРОФИЛЬ, УРОВЕНЬ И ДОСТИЖЕНИЯ КРЕСТИКОВ-НОЛИКОВ -->
+<div class="modal hidden" id="tttProfileModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="tttProfileModal">✖</button>
+    <h2>🏅 Профиль крестиков-ноликов</h2>
+    <div class="profile-level-block">
+      <div class="profile-level-emoji" id="tttProfileEmoji">🎯</div>
+      <div>
+        <div class="profile-level-name" id="tttProfileLevelName">Новичок клеточек</div>
+        <div class="profile-points-note"><span id="tttProfileWins">0</span> побед · <span id="tttProfileGames">0</span> игр</div>
+      </div>
+    </div>
+    <div class="level-bar"><div class="level-bar-fill" id="tttProfileBarFill"></div></div>
+    <p class="modal-note" id="tttProfileNextLevel"></p>
+
+    <div class="ttt-stats-row">
+      <div class="clicker-stat">🏆 Побед: <b id="tttStatWins">0</b></div>
+      <div class="clicker-stat">💀 Поражений: <b id="tttStatLosses">0</b></div>
+      <div class="clicker-stat">🤝 Ничьих: <b id="tttStatDraws">0</b></div>
+      <div class="clicker-stat">🔥 Серия побед: <b id="tttStatStreak">0</b></div>
+    </div>
+
+    <h2 style="margin-top:22px;">🏆 Достижения</h2>
+    <div class="ach-grid" id="tttAchievementsGrid"></div>
+  </div>
+</div>
+
 <!-- МОДАЛКА: СЛУЧАЙНОЕ СОБЫТИЕ -->
 <div class="modal hidden" id="eventModal">
   <div class="modal-card event-card">
@@ -461,6 +590,7 @@
 <script src="clicker.js"></script>
 <script src="snake.js"></script>
 <script src="doodle.js"></script>
+<script src="tictactoe.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

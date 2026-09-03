@@ -37,6 +37,9 @@ let currentSnakeHardList = [];
 let unsubDoodleRecords = null;
 let currentDoodleRecordsList = [];
 
+let unsubTTTRecords = null;
+let currentTTTRecordsList = [];
+
 function tryLogin(){
   if(!ADMIN_PASSWORD){
     loginError.textContent = 'Пароль администратора не настроен. Создай файл admin-config.js по примеру admin-config.example.js (см. SETUP-SECRETS.md).';
@@ -65,6 +68,10 @@ function tryLogin(){
     unsubDoodleRecords = DB.watchRecordsIn('doodleRecords', list=>{
       currentDoodleRecordsList = list;
       renderAdminDoodleRecords(list);
+    });
+    unsubTTTRecords = DB.watchRecordsIn('tttRecords', list=>{
+      currentTTTRecordsList = list;
+      renderAdminTTTRecords(list);
     });
 
     if(!window._configMounted){
@@ -292,6 +299,24 @@ function renderAdminDoodleRecords(list){
 document.getElementById('clearDoodleRecordsBtn').addEventListener('click', ()=>{
   if(confirm('Точно очистить ВСЕ рекорды Doodle-прыжков?')){
     DB.clearRecordsIn('doodleRecords', currentDoodleRecordsList);
+  }
+});
+
+/* ---------------- КРЕСТИКИ-НОЛИКИ: рекорды ---------------- */
+const tttRecordsState = { editingId: null };
+function renderAdminTTTRecords(list){
+  currentTTTRecordsList = list;
+  renderRecordsAdmin('adminTTTRecordsList', list, {
+    updateFn: (id, patch)=> DB.updateRecordIn('tttRecords', id, patch),
+    deleteFn: (id)=> DB.deleteRecordIn('tttRecords', id),
+    state: tttRecordsState,
+    rerender: ()=> renderAdminTTTRecords(currentTTTRecordsList)
+  });
+}
+
+document.getElementById('clearTTTRecordsBtn').addEventListener('click', ()=>{
+  if(confirm('Точно очистить ВСЕ рекорды крестиков-ноликов?')){
+    DB.clearRecordsIn('tttRecords', currentTTTRecordsList);
   }
 });
 
@@ -633,6 +658,140 @@ function mountAllConfigSections(){
   });
 
   mountDoodlePlayers();
+
+  /* ---- уровни крестиков-ноликов ---- */
+  mountConfigSection({
+    collection: 'tttLevels',
+    addFormElId: 'tttLevelsAddForm', addBtnId: 'tttLevelsAddBtn', listElId: 'tttLevelsList',
+    seed: (window.DEFAULTS && DEFAULTS.tttLevels) || [],
+    emptyText: 'Пока нет уровней.',
+    fields: [
+      { key:'emoji', label:'Эмодзи', type:'text', default:'🎯' },
+      { key:'name',  label:'Название', type:'text', default:'' },
+      { key:'min',   label:'От (побед)', type:'number', default:0 },
+      { key:'max',   label:'До (побед)', type:'number', default:10 }
+    ],
+    summary(item){ return { title: `${item.emoji || ''} ${item.name || ''}`, sub: `${item.min}–${item.max} побед` }; }
+  });
+
+  /* ---- достижения крестиков-ноликов ---- */
+  const tttAchTypeLabels = { games:'партий сыграно', wins:'побед всего', winsVsBot:'побед над ботом', winsOnline:'побед онлайн', draws:'ничьих', streak:'лучшая серия побед' };
+  mountConfigSection({
+    collection: 'tttAchievements',
+    addFormElId: 'tttAchievementsAddForm', addBtnId: 'tttAchievementsAddBtn', listElId: 'tttAchievementsList',
+    seed: (window.DEFAULTS && DEFAULTS.tttAchievements) || [],
+    emptyText: 'Пока нет достижений.',
+    fields: [
+      { key:'emoji', label:'Эмодзи', type:'text', default:'🏆' },
+      { key:'title', label:'Название', type:'text', default:'' },
+      { key:'desc',  label:'Описание', type:'textarea', default:'' },
+      { key:'type',  label:'Тип условия', type:'select', default:'wins', options: [
+        ['games','Партий сыграно'], ['wins','Побед всего'], ['winsVsBot','Побед над ботом'],
+        ['winsOnline','Побед онлайн'], ['draws','Ничьих'], ['streak','Лучшая серия побед']
+      ]},
+      { key:'target', label:'Нужное значение', type:'number', default:1 }
+    ],
+    summary(item){
+      return { title: `${item.emoji || ''} ${item.title || ''}`, sub: `${item.desc || ''} · условие: ${item.target} (${tttAchTypeLabels[item.type] || item.type})` };
+    }
+  });
+
+  mountTTTPlayers();
+}
+
+/* =========================================================
+   КРЕСТИКИ-НОЛИКИ — РЕДАКТИРОВАНИЕ СТАТИСТИКИ ИГРОКОВ
+========================================================= */
+function mountTTTPlayers(){
+  const listEl = document.getElementById('tttPlayersList');
+  const searchEl = document.getElementById('tttPlayersSearch');
+  if(!listEl || !searchEl) return;
+
+  let allPlayers = [];
+  let editingId = null;
+
+  function renderPlayers(){
+    if(editingId !== null) return;
+    const q = (searchEl.value || '').trim().toLowerCase();
+    const filtered = q ? allPlayers.filter(p=> (p.name || '').toLowerCase().includes(q)) : allPlayers;
+    listEl.innerHTML = '';
+    if(!filtered.length){
+      listEl.innerHTML = '<p class="news-empty">Игроков не найдено.</p>';
+      return;
+    }
+    filtered.slice(0, 100).forEach(p=>{
+      const card = document.createElement('div');
+      card.className = 'admin-list-item';
+      card.innerHTML = `
+        <div class="row">
+          <div class="info">
+            <div class="cfg-item-title">${escapeHtml(p.name || 'Без имени')}</div>
+            <div class="cfg-item-sub">Побед: ${p.wins || 0} · Поражений: ${p.losses || 0} · Ничьих: ${p.draws || 0} · Партий: ${p.gamesPlayed || 0} · Серия: ${p.streak || 0}</div>
+          </div>
+          <div class="actions">
+            <button class="mini-btn view-btn" data-edittp="1">✏️ Изменить</button>
+          </div>
+        </div>
+        <div class="cfg-form hidden" data-edittpform="1"></div>
+      `;
+      listEl.appendChild(card);
+
+      card.querySelector('[data-edittp]').addEventListener('click', ()=>{
+        const formEl = card.querySelector('[data-edittpform]');
+        if(!formEl.classList.contains('hidden')){
+          formEl.classList.add('hidden');
+          editingId = null;
+          renderPlayers();
+          return;
+        }
+        editingId = p.id;
+        const prefix = 'tp_' + p.id;
+        formEl.innerHTML = `
+          <label class="cfg-field wide">Никнейм<input type="text" id="${prefix}_name" value="${escapeHtml(p.name || '')}" maxlength="16"></label>
+          <label class="cfg-field">Побед<input type="number" id="${prefix}_wins" value="${p.wins || 0}"></label>
+          <label class="cfg-field">Поражений<input type="number" id="${prefix}_losses" value="${p.losses || 0}"></label>
+          <label class="cfg-field">Ничьих<input type="number" id="${prefix}_draws" value="${p.draws || 0}"></label>
+          <label class="cfg-field">Партий сыграно<input type="number" id="${prefix}_games" value="${p.gamesPlayed || 0}"></label>
+          <label class="cfg-field">Побед над ботом<input type="number" id="${prefix}_bot" value="${p.winsVsBot || 0}"></label>
+          <label class="cfg-field">Побед онлайн<input type="number" id="${prefix}_online" value="${p.winsOnline || 0}"></label>
+          <label class="cfg-field">Текущая серия побед<input type="number" id="${prefix}_streak" value="${p.streak || 0}"></label>
+          <label class="cfg-field">Лучшая серия побед<input type="number" id="${prefix}_beststreak" value="${p.bestStreak || 0}"></label>
+          <div class="cfg-form-actions">
+            <button class="mini-btn save-btn" type="button" data-savetp="1">💾 Сохранить</button>
+          </div>
+        `;
+        formEl.classList.remove('hidden');
+        formEl.querySelector('[data-savetp]').addEventListener('click', ()=>{
+          const nick = (document.getElementById(prefix + '_name').value || '').trim().slice(0, 16) || p.name;
+          const wins = parseInt(document.getElementById(prefix + '_wins').value, 10) || 0;
+          DB.setItem('tttPlayers', p.id, {
+            name: nick,
+            wins,
+            losses: parseInt(document.getElementById(prefix + '_losses').value, 10) || 0,
+            draws: parseInt(document.getElementById(prefix + '_draws').value, 10) || 0,
+            gamesPlayed: parseInt(document.getElementById(prefix + '_games').value, 10) || 0,
+            winsVsBot: parseInt(document.getElementById(prefix + '_bot').value, 10) || 0,
+            winsOnline: parseInt(document.getElementById(prefix + '_online').value, 10) || 0,
+            streak: parseInt(document.getElementById(prefix + '_streak').value, 10) || 0,
+            bestStreak: parseInt(document.getElementById(prefix + '_beststreak').value, 10) || 0
+          });
+          // держим таблицу рекордов (по победам) в согласии с ручной правкой
+          // (запись рекорда хранится под своим ID, а не ID игрока — ищем по playerId)
+          const rec = currentTTTRecordsList.find(r=> r.playerId === p.id);
+          if(rec) DB.updateRecordIn('tttRecords', rec.id, { name: nick, score: wins });
+          formEl.classList.add('hidden');
+          editingId = null;
+          renderPlayers();
+        });
+      });
+    });
+  }
+
+  DB.watchCollection('tttPlayers', list=>{
+    allPlayers = list.slice().sort((a,b)=> (b.wins || 0) - (a.wins || 0));
+    renderPlayers();
+  });
+  searchEl.addEventListener('input', renderPlayers);
 }
 
 /* =========================================================
@@ -841,7 +1000,13 @@ const DIAG_COLLECTIONS = [
   { name: 'doodleLevels',        label: 'Doodle-прыжки: уровни' },
   { name: 'doodleAchievements',  label: 'Doodle-прыжки: достижения' },
   { name: 'doodlePlayers',       label: 'Doodle-прыжки: профили игроков' },
-  { name: 'doodleRecords',       label: 'Doodle-прыжки: рекорды' }
+  { name: 'doodleRecords',       label: 'Doodle-прыжки: рекорды' },
+  { name: 'tttLevels',           label: 'Крестики-нолики: уровни' },
+  { name: 'tttAchievements',     label: 'Крестики-нолики: достижения' },
+  { name: 'tttPlayers',          label: 'Крестики-нолики: профили игроков' },
+  { name: 'tttRecords',          label: 'Крестики-нолики: рекорды' },
+  { name: 'tttLobby',            label: 'Крестики-нолики: очередь онлайн-игры' },
+  { name: 'tttGames',            label: 'Крестики-нолики: активные онлайн-партии' }
 ];
 
 async function runDiagnostics(){

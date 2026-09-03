@@ -94,6 +94,26 @@ const DEFAULTS = {
     { id: 'dach5', emoji: '🏃', title: 'Марафонец',         desc: 'Набери суммарно 2000 очков высоты за все игры', type: 'totalScore', target: 2000 },
     { id: 'dach6', emoji: '🌀', title: 'Пружинный мастер',  desc: 'Подпрыгни на пружине 10 раз',              type: 'springs',    target: 10 },
     { id: 'dach7', emoji: '🎮', title: 'Разминка',          desc: 'Сыграй 10 игр в Doodle-прыжки',            type: 'games',      target: 10 }
+  ],
+
+  /* ---- уровни в крестиках-ноликах (по числу побед) ---- */
+  tttLevels: [
+    { id: 'tlvl1', min: 0,  max: 2,      name: 'Новичок клеточек',        emoji: '🎯' },
+    { id: 'tlvl2', min: 3,  max: 9,      name: 'Тактик крестиков-ноликов', emoji: '✏️' },
+    { id: 'tlvl3', min: 10, max: 24,     name: 'Мастер трёх в ряд',       emoji: '🧠' },
+    { id: 'tlvl4', min: 25, max: 49,     name: 'Гроссмейстер поля',       emoji: '👑' },
+    { id: 'tlvl5', min: 50, max: 999999, name: 'Легенда крестиков-ноликов', emoji: '🌟' }
+  ],
+
+  /* ---- достижения в крестиках-ноликах ---- */
+  tttAchievements: [
+    { id: 'tach1', emoji: '🎮', title: 'Первая партия',   desc: 'Сыграй свою первую игру в крестики-нолики', type: 'games',       target: 1 },
+    { id: 'tach2', emoji: '🏆', title: 'Первая победа',   desc: 'Выиграй свою первую партию',                type: 'wins',        target: 1 },
+    { id: 'tach3', emoji: '🤖', title: 'Побеждён бот',    desc: 'Выиграй у компьютера 5 раз',                type: 'winsVsBot',   target: 5 },
+    { id: 'tach4', emoji: '🌐', title: 'Онлайн-чемпион',  desc: 'Выиграй 5 онлайн-партий у других игроков',  type: 'winsOnline',  target: 5 },
+    { id: 'tach5', emoji: '🔥', title: 'Победная серия',  desc: 'Выиграй 3 партии подряд',                   type: 'streak',      target: 3 },
+    { id: 'tach6', emoji: '🤝', title: 'Мирная ничья',    desc: 'Сыграй 5 партий вничью',                    type: 'draws',       target: 5 },
+    { id: 'tach7', emoji: '💯', title: 'Сто партий',      desc: 'Сыграй 100 партий в крестики-нолики',       type: 'games',       target: 100 }
   ]
 };
 

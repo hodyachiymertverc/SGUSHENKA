@@ -173,10 +173,12 @@ function showAchievementToast(a, scope){
   const onClickerScreen = isScreenVisible('clickerScreen');
   const onSnakeScreen = isScreenVisible('snakeGameScreen') || isScreenVisible('snakeMenuScreen');
   const onDoodleScreen = isScreenVisible('doodleGameScreen') || isScreenVisible('doodleMenuScreen');
+  const onTTTScreen = isScreenVisible('tttGameScreen') || isScreenVisible('tttMenuScreen');
   if(scope === 'clicker' && !onClickerScreen) return;
   if(scope === 'snake' && !onSnakeScreen) return;
   if(scope === 'doodle' && !onDoodleScreen) return;
-  if(scope === 'general' && (onClickerScreen || onSnakeScreen || onDoodleScreen)) return;
+  if(scope === 'ttt' && !onTTTScreen) return;
+  if(scope === 'general' && (onClickerScreen || onSnakeScreen || onDoodleScreen || onTTTScreen)) return;
   toastQueue.push(a);
   if(!toastShowing) advanceToast();
 }

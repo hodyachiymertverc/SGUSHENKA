@@ -615,3 +615,6 @@ if(window.Snake){
 if(window.Doodle){
   try{ Doodle.init(); } catch(err){ console.error('Doodle.init() упал:', err); }
 }
+if(window.TicTacToe){
+  try{ TicTacToe.init(); } catch(err){ console.error('TicTacToe.init() упал:', err); }
+}

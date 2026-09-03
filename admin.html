@@ -97,6 +97,7 @@
       <button class="admin-tab" data-tab="clicker">🥫 Кликер сгущёнки</button>
       <button class="admin-tab" data-tab="snake">🐍 Змейка</button>
       <button class="admin-tab" data-tab="doodle">🧗 Doodle-прыжки</button>
+      <button class="admin-tab" data-tab="ttt">❌⭕ Крестики-нолики</button>
     </div>
 
     <!-- ===================== ВКЛАДКА: НОВОСТИ ===================== -->
@@ -244,6 +245,39 @@
         <div id="doodleAchievementsAddForm"></div>
         <button class="btn btn-primary btn-small" id="doodleAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
         <div id="doodleAchievementsList" style="margin-top:12px;"></div>
+      </details>
+    </div>
+
+    <!-- ===================== ВКЛАДКА: КРЕСТИКИ-НОЛИКИ ===================== -->
+    <div class="admin-tab-panel hidden" data-panel="ttt">
+      <div class="admin-card">
+        <h2>🏆 Управление рекордами</h2>
+        <p class="modal-note">Общая таблица рекордов (по числу побед).</p>
+        <button class="btn btn-danger btn-small" id="clearTTTRecordsBtn">Очистить все рекорды</button>
+        <div id="adminTTTRecordsList"></div>
+      </div>
+
+      <details class="admin-card" open>
+        <summary><h2 style="display:inline;">🎮 Статистика игроков</h2></summary>
+        <p class="modal-note">Можно изменить никнейм, победы/поражения/ничьи и текущую серию побед вручную.</p>
+        <input class="text-input" id="tttPlayersSearch" placeholder="Поиск по никнейму…" style="margin-top:8px;">
+        <div id="tttPlayersList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">📈 Уровни крестиков-ноликов</h2></summary>
+        <p class="modal-note">Диапазоны считаются от общего числа побед игрока.</p>
+        <div id="tttLevelsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="tttLevelsAddBtn" style="margin-top:8px;">+ Добавить уровень</button>
+        <div id="tttLevelsList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🏆 Достижения крестиков-ноликов</h2></summary>
+        <p class="modal-note">Условие проверяется автоматически по накопленной статистике игрока.</p>
+        <div id="tttAchievementsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="tttAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
+        <div id="tttAchievementsList" style="margin-top:12px;"></div>
       </details>
     </div>
   </div>
