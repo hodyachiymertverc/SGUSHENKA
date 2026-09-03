@@ -37,10 +37,7 @@ function tttHide(el){
    PNG-КАРТИНКИ
    ========================================================= */
 
-const TTT_MARK_SRC = {
-  X: new URL('img/x.png', document.baseURI).href,
-  O: new URL('img/o.png', document.baseURI).href
-};
+const TTT_MARK_SRC = { X: 'img/x.png', O: 'img/o.png' };
 
 
 const TTT_WIN_LINES = [
