@@ -41,6 +41,16 @@ let doodleCharImg = null;
   img.src = DOODLE_CHAR_SRC;
 })();
 
+/* картинка пули — берём из общей картинки img/sgushenka.png */
+const DOODLE_BULLET_SRC = 'img/sgushenka.png';
+let doodleBulletImg = null;
+(function preloadDoodleBulletImg(){
+  const img = new Image();
+  img.onload = ()=> { doodleBulletImg = img; };
+  img.onerror = ()=> {};
+  img.src = DOODLE_BULLET_SRC;
+})();
+
 function doodleRoundRect(ctx, x, y, w, h, r){
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -64,6 +74,12 @@ const Doodle = {
   paused: false,
   keys: { left: false, right: false },
   pointerTargetX: null,
+
+  /* наклон телефона (гироскоп) — управление персонажем */
+  tiltValue: 0,       // сглаженное значение наклона, -1..1
+  tiltActive: false,  // приходят ли вообще события наклона
+  _tiltListenerAdded: false,
+  _tiltPermissionAsked: false,
 
   init(){
     this.playerId = getPlayerId();
@@ -265,7 +281,7 @@ const Doodle = {
   },
 
   /* ---------------- физика/настройки ---------------- */
-  GRAVITY: 0.5,
+  GRAVITY: 0.3,
   JUMP_VELOCITY: -13,
   SPRING_VELOCITY: -21,
   MOVE_ACCEL: 0.9,
@@ -273,7 +289,42 @@ const Doodle = {
   FRICTION: 0.86,
   POINTS_PER_PIXEL: 0.1, // высота в пикселях -> очки
 
+  /* ---------------- стрельба ---------------- */
+  BULLET_SPEED: 9.5,
+  BULLET_COOLDOWN_MS: 480,
+  BULLET_RANGE: 400, // насколько далеко по вертикали видит врагов
+
+  /* ---------------- наклон телефона ---------------- */
+  enableTiltControls(){
+    if(this._tiltListenerAdded) return;
+    this._tiltListenerAdded = true;
+    window.addEventListener('deviceorientation', e=>{
+      if(e.gamma === null || e.gamma === undefined) return;
+      // gamma: наклон влево-вправо, примерно -90..90 градусов
+      const raw = Math.max(-40, Math.min(40, e.gamma)) / 40; // -1..1
+      this.tiltValue = this.tiltValue * 0.72 + raw * 0.28; // сглаживание, без рывков
+      this.tiltActive = true;
+    });
+  },
+  requestTiltPermission(){
+    if(this._tiltPermissionAsked) return;
+    this._tiltPermissionAsked = true;
+    try{
+      if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+        // iOS 13+ требует явного разрешения по клику пользователя
+        DeviceOrientationEvent.requestPermission().then(state=>{
+          if(state === 'granted') this.enableTiltControls();
+        }).catch(()=>{});
+      } else if(typeof DeviceOrientationEvent !== 'undefined'){
+        this.enableTiltControls();
+      }
+    } catch(err){ /* устройство без гироскопа — просто не активируется */ }
+  },
+
   startGame(){
+    // запрашиваем доступ к гироскопу прямо по клику "Играть" (нужно для iOS)
+    this.requestTiltPermission();
+
     doodleHide(document.getElementById('doodleMenuScreen'));
     doodleShow(document.getElementById('doodleGameScreen'));
     doodleHide(document.getElementById('doodleGameOverOverlay'));
@@ -318,6 +369,9 @@ const Doodle = {
     this.platforms = [];
     this.monsters = [];
     this.particles = [];
+    this.bullets = [];
+    this._shootCooldown = 0;
+    this.tiltValue = 0;
     this._highestGenY = this.player.y; // самая верхняя (по факту наименьшая) сгенерированная координата
 
     // стартовая платформа прямо под игроком
@@ -395,9 +449,18 @@ const Doodle = {
       p.vx += this.MOVE_ACCEL * frames;
       p.facing = 1;
       this.pointerTargetX = null;
+    } else if(this.tiltActive && Math.abs(this.tiltValue) > 0.045){
+      // наклон телефона — как аналоговый стик: чем сильнее наклон, тем быстрее едем
+      const axis = Math.max(-1, Math.min(1, this.tiltValue));
+      p.vx += axis * this.MOVE_ACCEL * 1.35 * frames;
+      p.facing = axis > 0 ? 1 : -1;
+      this.pointerTargetX = null;
     } else if(this.pointerTargetX !== null){
+      // управление пальцем/мышью — П-регулятор с демпфированием (без него
+      // персонаж бесконечно колеблется вокруг цели, отсюда были "дёргания")
       const dx = this.pointerTargetX - p.x;
-      p.vx += Math.max(-this.MOVE_ACCEL * 1.6, Math.min(this.MOVE_ACCEL * 1.6, dx * 0.09)) * frames;
+      const accel = dx * 0.09 - p.vx * 0.16;
+      p.vx += Math.max(-this.MOVE_ACCEL * 1.6, Math.min(this.MOVE_ACCEL * 1.6, accel)) * frames;
       if(Math.abs(dx) > 3) p.facing = dx > 0 ? 1 : -1;
     } else {
       p.vx *= Math.pow(this.FRICTION, frames);
@@ -413,12 +476,21 @@ const Doodle = {
 
     this.applyInput(frames);
 
-    // движущиеся платформы
+    // движущиеся платформы — едут туда-сюда, разворачиваясь и на краю
+    // своего диапазона, и на краю карты (раньше на краю карты платформа
+    // просто упиралась и "залипала", не меняя направление)
     this.platforms.forEach(pl=>{
       if(pl.type === 'moving' && !pl.broken){
+        const minX = Math.max(pl.w / 2, pl.baseX - pl.moveRange);
+        const maxX = Math.min(this.W - pl.w / 2, pl.baseX + pl.moveRange);
         pl.x += pl.dir * 2.1 * frames;
-        if(pl.x < pl.baseX - pl.moveRange || pl.x > pl.baseX + pl.moveRange) pl.dir *= -1;
-        pl.x = Math.max(pl.w / 2, Math.min(this.W - pl.w / 2, pl.x));
+        if(pl.x <= minX){ pl.x = minX; pl.dir = 1; }
+        else if(pl.x >= maxX){ pl.x = maxX; pl.dir = -1; }
+      }
+      // затухание анимации пружины после отскока
+      if(pl.springKick){
+        pl.springKick *= Math.pow(0.85, frames);
+        if(pl.springKick < 0.02) pl.springKick = 0;
       }
     });
     // враги (испорченные банки)
@@ -454,6 +526,7 @@ const Doodle = {
             p.vy = this.SPRING_VELOCITY;
             this.springsThisGame++;
             this.spawnBoostParticles(pl.x, pl.y);
+            pl.springKick = 1; // запускаем анимацию пружины
           } else {
             p.vy = this.JUMP_VELOCITY;
           }
@@ -471,6 +544,9 @@ const Doodle = {
         return;
       }
     }
+
+    // автострельба по врагам
+    this.updateShooting(dt, frames);
 
     // камера следует только вверх (никогда не откатывается вниз)
     const screenY = p.y - this.camTop;
@@ -507,6 +583,80 @@ const Doodle = {
     for(let i = 0; i < 6; i++){
       this.particles.push({ x: x + (Math.random() - 0.5) * 30, y, life: 26 + Math.random() * 10 });
     }
+  },
+
+  /* ---------------- автострельба по врагам ---------------- */
+  updateShooting(dt, frames){
+    const p = this.player;
+
+    if(this._shootCooldown > 0) this._shootCooldown -= dt;
+
+    // ищем ближайшего врага в зоне видимости над персонажем
+    if(this._shootCooldown <= 0 && this.monsters.length){
+      let target = null, bestD = Infinity;
+      for(const m of this.monsters){
+        const dy = p.y - m.y;
+        if(dy < -this.playerSize) continue; // враг ниже персонажа — не стреляем
+        if(dy > this.BULLET_RANGE) continue; // слишком далеко сверху
+        const dx = m.x - p.x;
+        const d = dx * dx + dy * dy;
+        if(d < bestD){ bestD = d; target = m; }
+      }
+      if(target){
+        const dx = target.x - p.x, dy = target.y - p.y;
+        const dist = Math.max(1, Math.hypot(dx, dy));
+        this.bullets.push({
+          x: p.x, y: p.y - this.playerSize * 0.42,
+          vx: (dx / dist) * this.BULLET_SPEED,
+          vy: (dy / dist) * this.BULLET_SPEED
+        });
+        this._shootCooldown = this.BULLET_COOLDOWN_MS;
+      }
+    }
+
+    // двигаем пули и проверяем попадания
+    this.bullets = this.bullets.filter(b=>{
+      b.x += b.vx * frames;
+      b.y += b.vy * frames;
+
+      for(const m of this.monsters){
+        if(m.dead) continue;
+        const dx = b.x - m.x, dy = b.y - m.y;
+        const rr = m.size * 0.5 + 6;
+        if(dx * dx + dy * dy < rr * rr){
+          m.dead = true;
+          this.spawnBoostParticles(m.x, m.y);
+          return false;
+        }
+      }
+
+      if(b.y < this.camTop - 80) return false;
+      if(b.y > this.camTop + this.H + 80) return false;
+      return true;
+    });
+
+    if(this.monsters.some(m=> m.dead)){
+      this.monsters = this.monsters.filter(m=> !m.dead);
+    }
+  },
+
+  drawBullet(ctx, b){
+    const sy = b.y - this.camTop;
+    if(sy < -40 || sy > this.H + 40) return;
+    const s = Math.max(14, this.playerSize * 0.32);
+    ctx.save();
+    ctx.translate(b.x, sy);
+    const angle = Math.atan2(b.vy, b.vx) + Math.PI / 2;
+    ctx.rotate(angle);
+    if(doodleBulletImg){
+      ctx.drawImage(doodleBulletImg, -s / 2, -s / 2, s, s);
+    } else {
+      ctx.fillStyle = '#F2B705';
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.32, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   },
 
   loop(now){
@@ -567,19 +717,23 @@ const Doodle = {
     }
 
     if(pl.spring){
+      // анимация: сразу после отскока пружина резко растягивается выше
+      // обычного, а потом плавно "усаживается" обратно в состояние покоя
+      const kick = pl.springKick || 0;
       const cx = pl.x, topY = sy - this.platH / 2;
+      const stretch = pl.w * 0.22 * (1 + kick * 1.6);
       ctx.strokeStyle = '#5E3A1A';
       ctx.lineWidth = Math.max(2, pl.w * 0.03);
       ctx.beginPath();
-      const coilW = pl.w * 0.16, coils = 3;
+      const coilW = pl.w * (0.16 + kick * 0.05), coils = 3;
       for(let i = 0; i <= coils * 2; i++){
-        const yy = topY - (i / (coils * 2)) * (pl.w * 0.22);
+        const yy = topY - (i / (coils * 2)) * stretch;
         const xx = cx + (i % 2 === 0 ? -coilW : coilW);
         if(i === 0) ctx.moveTo(cx, topY); else ctx.lineTo(xx, yy);
       }
       ctx.stroke();
       ctx.fillStyle = '#F2B705';
-      doodleRoundRect(ctx, cx - pl.w * 0.16, topY - pl.w * 0.22 - 5, pl.w * 0.32, 7, 3);
+      doodleRoundRect(ctx, cx - pl.w * 0.16, topY - stretch - 5, pl.w * 0.32, 7, 3);
       ctx.fill();
     }
   },
@@ -650,6 +804,7 @@ const Doodle = {
 
     this.platforms.forEach(pl=> this.drawPlatform(ctx, pl));
     this.monsters.forEach(m=> this.drawMonster(ctx, m));
+    this.bullets.forEach(b=> this.drawBullet(ctx, b));
 
     // частицы пружины
     ctx.fillStyle = 'rgba(242,183,5,0.85)';
@@ -738,10 +893,13 @@ const Doodle = {
       else if(rightKeys.has(e.key)) this.keys.right = false;
     });
 
-    // палец/мышь — персонаж стремится к позиции пальца по X
+    // палец/мышь — запасной способ управления (когда наклон телефона
+    // недоступен/не разрешён). Если наклон уже активен — пальцем не
+    // управляем, чтобы способы ввода не спорили друг с другом.
     const canvas = document.getElementById('doodleCanvas');
     if(canvas){
       const setPointerFromEvent = (clientX)=>{
+        if(this.tiltActive) return;
         const rect = canvas.getBoundingClientRect();
         this.pointerTargetX = clientX - rect.left;
       };
