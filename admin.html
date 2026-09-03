@@ -96,6 +96,7 @@
       <button class="admin-tab" data-tab="catch">🍯 Лови сгущёнку!</button>
       <button class="admin-tab" data-tab="clicker">🥫 Кликер сгущёнки</button>
       <button class="admin-tab" data-tab="snake">🐍 Змейка</button>
+      <button class="admin-tab" data-tab="doodle">🧗 Doodle-прыжки</button>
     </div>
 
     <!-- ===================== ВКЛАДКА: НОВОСТИ ===================== -->
@@ -210,6 +211,39 @@
         <div id="snakeAchievementsAddForm"></div>
         <button class="btn btn-primary btn-small" id="snakeAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
         <div id="snakeAchievementsList" style="margin-top:12px;"></div>
+      </details>
+    </div>
+
+    <!-- ===================== ВКЛАДКА: DOODLE-ПРЫЖКИ ===================== -->
+    <div class="admin-tab-panel hidden" data-panel="doodle">
+      <div class="admin-card">
+        <h2>🏆 Управление рекордами</h2>
+        <p class="modal-note">Общая таблица рекордов Doodle-прыжков (по максимальной высоте за игру).</p>
+        <button class="btn btn-danger btn-small" id="clearDoodleRecordsBtn">Очистить все рекорды</button>
+        <div id="adminDoodleRecordsList"></div>
+      </div>
+
+      <details class="admin-card" open>
+        <summary><h2 style="display:inline;">🥫 Статистика игроков</h2></summary>
+        <p class="modal-note">Можно изменить никнейм и любую накопленную статистику игрока вручную.</p>
+        <input class="text-input" id="doodlePlayersSearch" placeholder="Поиск по никнейму…" style="margin-top:8px;">
+        <div id="doodlePlayersList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">📈 Уровни Doodle-прыжков</h2></summary>
+        <p class="modal-note">Диапазоны считаются от суммарной высоты, набранной за все игры.</p>
+        <div id="doodleLevelsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="doodleLevelsAddBtn" style="margin-top:8px;">+ Добавить уровень</button>
+        <div id="doodleLevelsList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🏆 Достижения Doodle-прыжков</h2></summary>
+        <p class="modal-note">Условие проверяется автоматически по накопленной статистике игрока в Doodle-прыжках.</p>
+        <div id="doodleAchievementsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="doodleAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
+        <div id="doodleAchievementsList" style="margin-top:12px;"></div>
       </details>
     </div>
   </div>

@@ -74,6 +74,26 @@ const DEFAULTS = {
     { id: 'sach4', emoji: '🎮', title: 'Разминка',        desc: 'Сыграй 5 игр в змейку',                 type: 'games',    target: 5 },
     { id: 'sach5', emoji: '🥇', title: 'Крепкий рекорд',  desc: 'Набери 20 очков на лёгком уровне',      type: 'bestEasy', target: 20 },
     { id: 'sach6', emoji: '💣', title: 'Сапёр',           desc: 'Набери 15 очков на сложном уровне',     type: 'bestHard', target: 15 }
+  ],
+
+  /* ---- уровни в Doodle-прыжках (по суммарной высоте за все игры) ---- */
+  doodleLevels: [
+    { id: 'dlvl1', min: 0,    max: 199,    name: 'Новичок-прыгун',      emoji: '🥄' },
+    { id: 'dlvl2', min: 200,  max: 799,    name: 'Прыгучая сгущёнка',   emoji: '🦘' },
+    { id: 'dlvl3', min: 800,  max: 2499,   name: 'Покоритель высот',    emoji: '⭐' },
+    { id: 'dlvl4', min: 2500, max: 5999,   name: 'Небесный прыгун',     emoji: '👑' },
+    { id: 'dlvl5', min: 6000, max: 999999, name: 'Легенда прыжков',     emoji: '🌟' }
+  ],
+
+  /* ---- достижения в Doodle-прыжках ---- */
+  doodleAchievements: [
+    { id: 'dach1', emoji: '🦘', title: 'Первый прыжок',     desc: 'Сыграй свою первую игру в Doodle-прыжки', type: 'games',      target: 1 },
+    { id: 'dach2', emoji: '🥫', title: 'Сотня банок',       desc: 'Забрайся на высоту 100 очков за одну игру', type: 'bestScore', target: 100 },
+    { id: 'dach3', emoji: '⭐', title: 'Высоко в облаках',  desc: 'Забрайся на высоту 500 очков за одну игру', type: 'bestScore', target: 500 },
+    { id: 'dach4', emoji: '👑', title: 'Покоритель неба',   desc: 'Забрайся на высоту 1500 очков за одну игру', type: 'bestScore', target: 1500 },
+    { id: 'dach5', emoji: '🏃', title: 'Марафонец',         desc: 'Набери суммарно 2000 очков высоты за все игры', type: 'totalScore', target: 2000 },
+    { id: 'dach6', emoji: '🌀', title: 'Пружинный мастер',  desc: 'Подпрыгни на пружине 10 раз',              type: 'springs',    target: 10 },
+    { id: 'dach7', emoji: '🎮', title: 'Разминка',          desc: 'Сыграй 10 игр в Doodle-прыжки',            type: 'games',      target: 10 }
   ]
 };
 

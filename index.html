@@ -66,6 +66,11 @@
           <span class="game-pick-name">Змейка</span>
           <span class="game-pick-desc">Собирай сгущёнку и расти</span>
         </button>
+        <button class="game-pick" id="pickDoodleBtn">
+          <span class="game-pick-emoji">🧗</span>
+          <span class="game-pick-name">Doodle-прыжки</span>
+          <span class="game-pick-desc">Прыгай по банкам всё выше</span>
+        </button>
       </div>
     </div>
   </section>
@@ -221,6 +226,58 @@
     </div>
   </section>
 
+  <!-- ЭКРАН МЕНЮ DOODLE-ПРЫЖКОВ -->
+  <section id="doodleMenuScreen" class="screen hidden">
+    <div class="menu-card">
+      <button class="btn btn-secondary btn-small back-btn" id="doodleBackToSelectBtn">⬅ Выбор игры</button>
+      <h1 class="title">🧗 Doodle-прыжки</h1>
+      <p class="subtitle">Прыгай по банкам всё выше и выше — не упади и обходи испорченные банки!</p>
+
+      <div class="clicker-level-pill">
+        <span id="doodleLevelEmoji">🥄</span>
+        <div class="clicker-level-text">
+          <span id="doodleLevelName">Новичок-прыгун</span>
+          <small id="doodleLevelNext"></small>
+        </div>
+      </div>
+
+      <div class="menu-buttons" style="margin-top:16px;">
+        <button class="btn btn-primary" id="doodlePlayBtn">▶ Начать играть</button>
+        <button class="btn btn-secondary" id="doodleRecordsBtn">🏆 Рекорды</button>
+        <button class="btn btn-secondary" id="doodleProfileBtn">🏅 Профиль и достижения</button>
+      </div>
+      <p class="hint">На телефоне двигай пальцем по экрану, на компьютере — стрелки ← → или A/D</p>
+    </div>
+  </section>
+
+  <!-- ЭКРАН ИГРЫ DOODLE-ПРЫЖКОВ -->
+  <section id="doodleGameScreen" class="screen hidden">
+    <div class="hud" id="doodleHud">
+      <div class="score-pill">Высота: <span id="doodleScoreValue">0</span></div>
+      <button class="btn btn-small" id="doodlePauseBtn">⏸ Пауза</button>
+      <button class="btn btn-small btn-danger" id="doodleExitBtn">✖ Выход</button>
+    </div>
+    <div class="game-wrap doodle-wrap" id="doodleGameWrap">
+      <canvas id="doodleCanvas"></canvas>
+      <div id="doodlePauseOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2>Пауза</h2>
+          <button class="btn btn-primary" id="doodleResumeBtn">▶ Продолжить</button>
+          <button class="btn btn-secondary" id="doodlePauseExitBtn">В меню</button>
+        </div>
+      </div>
+      <div id="doodleGameOverOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2 id="doodleGameOverTitle">💥 Игра окончена!</h2>
+          <p class="final-score">Твоя высота: <span id="doodleFinalScore">0</span></p>
+          <p id="doodleNewRecordText" class="new-record hidden">🎉 Новый рекорд!</p>
+          <button class="btn btn-primary" id="doodleRestartBtn">🔁 Играть снова</button>
+          <button class="btn btn-secondary" id="doodleGoMenuBtn">В меню</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <!-- МОДАЛКА: РЕКОРДЫ -->
@@ -341,6 +398,36 @@
   </div>
 </div>
 
+<!-- МОДАЛКА: РЕКОРДЫ DOODLE-ПРЫЖКОВ -->
+<div class="modal hidden" id="doodleRecordsModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="doodleRecordsModal">✖</button>
+    <h2>🏆 Рекорды Doodle-прыжков</h2>
+    <p class="modal-note">Общий рейтинг всех игроков по максимальной высоте.</p>
+    <ol class="records-list" id="doodleRecordsList"></ol>
+  </div>
+</div>
+
+<!-- МОДАЛКА: ПРОФИЛЬ, УРОВЕНЬ И ДОСТИЖЕНИЯ DOODLE-ПРЫЖКОВ -->
+<div class="modal hidden" id="doodleProfileModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="doodleProfileModal">✖</button>
+    <h2>🏅 Профиль Doodle-прыжков</h2>
+    <div class="profile-level-block">
+      <div class="profile-level-emoji" id="doodleProfileEmoji">🥄</div>
+      <div>
+        <div class="profile-level-name" id="doodleProfileLevelName">Новичок-прыгун</div>
+        <div class="profile-points-note"><span id="doodleProfilePoints">0</span> очков высоты всего</div>
+      </div>
+    </div>
+    <div class="level-bar"><div class="level-bar-fill" id="doodleProfileBarFill"></div></div>
+    <p class="modal-note" id="doodleProfileNextLevel"></p>
+
+    <h2 style="margin-top:22px;">🏆 Достижения</h2>
+    <div class="ach-grid" id="doodleAchievementsGrid"></div>
+  </div>
+</div>
+
 <!-- МОДАЛКА: СЛУЧАЙНОЕ СОБЫТИЕ -->
 <div class="modal hidden" id="eventModal">
   <div class="modal-card event-card">
@@ -373,6 +460,7 @@
 <script src="events.js"></script>
 <script src="clicker.js"></script>
 <script src="snake.js"></script>
+<script src="doodle.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

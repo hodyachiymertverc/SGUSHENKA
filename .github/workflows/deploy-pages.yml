@@ -1,5 +1,11 @@
 name: Deploy to GitHub Pages
 
+# Собирает сайт и генерирует firebase-config.js / admin-config.js
+# ПРЯМО ПРИ ДЕПЛОЕ из секретов репозитория (Settings → Secrets and
+# variables → Actions), а не из закоммиченных файлов — так реальные
+# ключи и пароль вообще никогда не попадают в git-историю и не
+# видны в публичном репозитории. Подробности — в SETUP-SECRETS.md.
+
 on:
   push:
     branches: [ main ]
@@ -17,18 +23,13 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Сгенерировать firebase-config.js
+      - name: Сгенерировать firebase-config.js из секретов
         run: |
-          cat > firebase-config.js << 'EOF'
+          cat > firebase-config.js << EOF
           window.FIREBASE_CONFIG = {
             apiKey: "${{ secrets.FIREBASE_API_KEY }}",
             authDomain: "${{ secrets.FIREBASE_AUTH_DOMAIN }}",
@@ -40,20 +41,20 @@ jobs:
           };
           EOF
 
-      - name: Сгенерировать admin-config.js
+      - name: Сгенерировать admin-config.js из секрета
         run: |
-          cat > admin-config.js << 'EOF'
+          cat > admin-config.js << EOF
           window.ADMIN_PASSWORD = "${{ secrets.ADMIN_PASSWORD }}";
           EOF
 
       - name: Настроить GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Загрузить сайт
-        uses: actions/upload-pages-artifact@v4
+      - name: Загрузить артефакт сайта
+        uses: actions/upload-pages-artifact@v3
         with:
           path: .
 
-      - name: Опубликовать сайт
+      - name: Опубликовать на GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

@@ -34,6 +34,9 @@ let unsubSnakeHard = null;
 let currentSnakeEasyList = [];
 let currentSnakeHardList = [];
 
+let unsubDoodleRecords = null;
+let currentDoodleRecordsList = [];
+
 function tryLogin(){
   if(!ADMIN_PASSWORD){
     loginError.textContent = 'Пароль администратора не настроен. Создай файл admin-config.js по примеру admin-config.example.js (см. SETUP-SECRETS.md).';
@@ -58,6 +61,10 @@ function tryLogin(){
     unsubSnakeHard = DB.watchRecordsIn('snakeRecordsHard', list=>{
       currentSnakeHardList = list;
       renderAdminSnakeRecords('adminSnakeRecordsHard', list, 'snakeRecordsHard');
+    });
+    unsubDoodleRecords = DB.watchRecordsIn('doodleRecords', list=>{
+      currentDoodleRecordsList = list;
+      renderAdminDoodleRecords(list);
     });
 
     if(!window._configMounted){
@@ -267,6 +274,24 @@ document.getElementById('clearSnakeEasyBtn').addEventListener('click', ()=>{
 document.getElementById('clearSnakeHardBtn').addEventListener('click', ()=>{
   if(confirm('Точно очистить ВСЕ рекорды сложного уровня змейки?')){
     DB.clearRecordsIn('snakeRecordsHard', currentSnakeHardList);
+  }
+});
+
+/* ---------------- DOODLE-ПРЫЖКИ: рекорды ---------------- */
+const doodleRecordsState = { editingId: null };
+function renderAdminDoodleRecords(list){
+  currentDoodleRecordsList = list;
+  renderRecordsAdmin('adminDoodleRecordsList', list, {
+    updateFn: (id, patch)=> DB.updateRecordIn('doodleRecords', id, patch),
+    deleteFn: (id)=> DB.deleteRecordIn('doodleRecords', id),
+    state: doodleRecordsState,
+    rerender: ()=> renderAdminDoodleRecords(currentDoodleRecordsList)
+  });
+}
+
+document.getElementById('clearDoodleRecordsBtn').addEventListener('click', ()=>{
+  if(confirm('Точно очистить ВСЕ рекорды Doodle-прыжков?')){
+    DB.clearRecordsIn('doodleRecords', currentDoodleRecordsList);
   }
 });
 
@@ -570,6 +595,126 @@ function mountAllConfigSections(){
       return { title: `${item.emoji || ''} ${item.title || ''}`, sub: `${item.desc || ''} · условие: ${item.target} (${snakeAchTypeLabels[item.type] || item.type})` };
     }
   });
+
+  /* ---- уровни Doodle-прыжков ---- */
+  mountConfigSection({
+    collection: 'doodleLevels',
+    addFormElId: 'doodleLevelsAddForm', addBtnId: 'doodleLevelsAddBtn', listElId: 'doodleLevelsList',
+    seed: (window.DEFAULTS && DEFAULTS.doodleLevels) || [],
+    emptyText: 'Пока нет уровней.',
+    fields: [
+      { key:'emoji', label:'Эмодзи', type:'text', default:'🥄' },
+      { key:'name',  label:'Название', type:'text', default:'' },
+      { key:'min',   label:'От (высоты всего)', type:'number', default:0 },
+      { key:'max',   label:'До (высоты всего)', type:'number', default:200 }
+    ],
+    summary(item){ return { title: `${item.emoji || ''} ${item.name || ''}`, sub: `${item.min}–${item.max} очков высоты всего` }; }
+  });
+
+  /* ---- достижения Doodle-прыжков ---- */
+  const doodleAchTypeLabels = { bestScore:'рекорд за одну игру', totalScore:'высота всего', games:'игр сыграно', springs:'прыжков на пружине' };
+  mountConfigSection({
+    collection: 'doodleAchievements',
+    addFormElId: 'doodleAchievementsAddForm', addBtnId: 'doodleAchievementsAddBtn', listElId: 'doodleAchievementsList',
+    seed: (window.DEFAULTS && DEFAULTS.doodleAchievements) || [],
+    emptyText: 'Пока нет достижений.',
+    fields: [
+      { key:'emoji', label:'Эмодзи', type:'text', default:'🏆' },
+      { key:'title', label:'Название', type:'text', default:'' },
+      { key:'desc',  label:'Описание', type:'textarea', default:'' },
+      { key:'type',  label:'Тип условия', type:'select', default:'bestScore', options: [
+        ['bestScore','Рекорд за одну игру'], ['totalScore','Высота всего (сумма)'], ['games','Игр сыграно'], ['springs','Прыжков на пружине']
+      ]},
+      { key:'target', label:'Нужное значение', type:'number', default:1 }
+    ],
+    summary(item){
+      return { title: `${item.emoji || ''} ${item.title || ''}`, sub: `${item.desc || ''} · условие: ${item.target} (${doodleAchTypeLabels[item.type] || item.type})` };
+    }
+  });
+
+  mountDoodlePlayers();
+}
+
+/* =========================================================
+   DOODLE-ПРЫЖКИ — РЕДАКТИРОВАНИЕ СТАТИСТИКИ ИГРОКОВ
+========================================================= */
+function mountDoodlePlayers(){
+  const listEl = document.getElementById('doodlePlayersList');
+  const searchEl = document.getElementById('doodlePlayersSearch');
+  if(!listEl || !searchEl) return;
+
+  let allPlayers = [];
+  let editingId = null;
+
+  function renderPlayers(){
+    if(editingId !== null) return;
+    const q = (searchEl.value || '').trim().toLowerCase();
+    const filtered = q ? allPlayers.filter(p=> (p.name || '').toLowerCase().includes(q)) : allPlayers;
+    listEl.innerHTML = '';
+    if(!filtered.length){
+      listEl.innerHTML = '<p class="news-empty">Игроков не найдено.</p>';
+      return;
+    }
+    filtered.slice(0, 100).forEach(p=>{
+      const card = document.createElement('div');
+      card.className = 'admin-list-item';
+      card.innerHTML = `
+        <div class="row">
+          <div class="info">
+            <div class="cfg-item-title">${escapeHtml(p.name || 'Без имени')}</div>
+            <div class="cfg-item-sub">Рекорд: ${Math.floor(p.bestScore || 0)} · Высота всего: ${Math.floor(p.totalScore || 0)} · Игр: ${p.gamesPlayed || 0} · Пружин: ${p.springsUsed || 0}</div>
+          </div>
+          <div class="actions">
+            <button class="mini-btn view-btn" data-editdp="1">✏️ Изменить</button>
+          </div>
+        </div>
+        <div class="cfg-form hidden" data-editdpform="1"></div>
+      `;
+      listEl.appendChild(card);
+
+      card.querySelector('[data-editdp]').addEventListener('click', ()=>{
+        const formEl = card.querySelector('[data-editdpform]');
+        if(!formEl.classList.contains('hidden')){
+          formEl.classList.add('hidden');
+          editingId = null;
+          renderPlayers();
+          return;
+        }
+        editingId = p.id;
+        const prefix = 'dp_' + p.id;
+        formEl.innerHTML = `
+          <label class="cfg-field wide">Никнейм<input type="text" id="${prefix}_name" value="${escapeHtml(p.name || '')}" maxlength="16"></label>
+          <label class="cfg-field">Рекорд (за игру)<input type="number" id="${prefix}_best" value="${Math.floor(p.bestScore || 0)}"></label>
+          <label class="cfg-field">Высота всего<input type="number" id="${prefix}_total" value="${Math.floor(p.totalScore || 0)}"></label>
+          <label class="cfg-field">Игр сыграно<input type="number" id="${prefix}_games" value="${p.gamesPlayed || 0}"></label>
+          <label class="cfg-field">Прыжков на пружине<input type="number" id="${prefix}_springs" value="${p.springsUsed || 0}"></label>
+          <div class="cfg-form-actions">
+            <button class="mini-btn save-btn" type="button" data-savedp="1">💾 Сохранить</button>
+          </div>
+        `;
+        formEl.classList.remove('hidden');
+        formEl.querySelector('[data-savedp]').addEventListener('click', ()=>{
+          const nick = (document.getElementById(prefix + '_name').value || '').trim().slice(0, 16) || p.name;
+          DB.setItem('doodlePlayers', p.id, {
+            name: nick,
+            bestScore: parseFloat(document.getElementById(prefix + '_best').value) || 0,
+            totalScore: parseFloat(document.getElementById(prefix + '_total').value) || 0,
+            gamesPlayed: parseInt(document.getElementById(prefix + '_games').value, 10) || 0,
+            springsUsed: parseInt(document.getElementById(prefix + '_springs').value, 10) || 0
+          });
+          formEl.classList.add('hidden');
+          editingId = null;
+          renderPlayers();
+        });
+      });
+    });
+  }
+
+  DB.watchCollection('doodlePlayers', list=>{
+    allPlayers = list.slice().sort((a,b)=> (b.bestScore || 0) - (a.bestScore || 0));
+    renderPlayers();
+  });
+  searchEl.addEventListener('input', renderPlayers);
 }
 
 /* =========================================================
@@ -692,7 +837,11 @@ const DIAG_COLLECTIONS = [
   { name: 'snakeAchievements',   label: 'Змейка: достижения' },
   { name: 'snakePlayers',        label: 'Змейка: профили игроков' },
   { name: 'snakeRecordsEasy',    label: 'Змейка: рекорды (лёгкий)' },
-  { name: 'snakeRecordsHard',    label: 'Змейка: рекорды (сложный)' }
+  { name: 'snakeRecordsHard',    label: 'Змейка: рекорды (сложный)' },
+  { name: 'doodleLevels',        label: 'Doodle-прыжки: уровни' },
+  { name: 'doodleAchievements',  label: 'Doodle-прыжки: достижения' },
+  { name: 'doodlePlayers',       label: 'Doodle-прыжки: профили игроков' },
+  { name: 'doodleRecords',       label: 'Doodle-прыжки: рекорды' }
 ];
 
 async function runDiagnostics(){
@@ -742,7 +891,8 @@ async function runDiagnostics(){
 для каждого раздела: levels, achievements, events, profiles,
 clickerLevels, clickerAchievements, clickerUpgrades, clickerPlayers,
 snakeLevels, snakeAchievements, snakePlayers, snakeRecordsEasy,
-snakeRecordsHard — по аналогии с тем, как уже разрешены records и news).`;
+snakeRecordsHard, doodleLevels, doodleAchievements, doodlePlayers,
+doodleRecords — по аналогии с тем, как уже разрешены records и news).`;
   } else if(hintEl){
     hintEl.classList.add('hidden');
   }

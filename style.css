@@ -150,7 +150,7 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 #scoreValue{ color: var(--pink); }
 
 .game-wrap{ position:relative; touch-action:none; }
-#gameCanvas, #snakeCanvas{
+#gameCanvas, #snakeCanvas, #doodleCanvas{
   display:block; width:100%;
   background: linear-gradient(180deg, #BEE7F5 0%, #FFF3D6 100%);
   border-radius: 22px; border: 4px solid var(--white);
@@ -450,3 +450,8 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 }
 .records-tab:active{ transform: translateY(2px); }
 .records-tab.active{ background: linear-gradient(180deg,#FFCE54,var(--gold)); box-shadow: 0 3px 0 #C68F00; border-color: var(--gold); }
+
+/* =========================================================
+   DOODLE-ПРЫЖКИ
+========================================================= */
+.doodle-wrap{ margin-bottom: 12px; }

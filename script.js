@@ -612,3 +612,6 @@ if(window.Clicker){
 if(window.Snake){
   try{ Snake.init(); } catch(err){ console.error('Snake.init() упал:', err); }
 }
+if(window.Doodle){
+  try{ Doodle.init(); } catch(err){ console.error('Doodle.init() упал:', err); }
+}
