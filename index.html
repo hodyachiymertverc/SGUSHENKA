@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#8ECAE6">
+<title>Лови сгущёнку!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="sky">
+  <div class="cloud cloud1"></div>
+  <div class="cloud cloud2"></div>
+  <div class="cloud cloud3"></div>
+</div>
+
+<!-- Верхняя панель -->
+<header class="topbar">
+  <div class="logo" id="logoBtn" title="Лови сгущёнку!">
+    <img src="img/sgushenka.png" alt="Сгущёнка" width="28" height="28">
+    Лови сгущёнку!
+</div>
+  <div class="topbar-actions">
+    <button class="news-btn" id="profileBtn" title="Профиль и достижения">
+      <span id="profileBadgeEmoji">🥄</span>
+    </button>
+    <button class="news-btn" id="newsBtn" title="Новости">
+      📰
+      <span class="news-badge hidden" id="newsBadge">!</span>
+    </button>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- ЭКРАН ВЫБОРА ИГРЫ -->
+  <section id="gameSelectScreen" class="screen">
+    <div class="menu-card">
+      <div class="nickname-bar" id="nicknameBar">
+        <span class="nickname-bar-text">👤 <b id="nicknameDisplay">Игрок</b></span>
+        <button class="btn btn-secondary btn-small" id="nicknameEditBtn">✏️ Изменить</button>
+      </div>
+      <div class="nickname-edit-row hidden" id="nicknameEditRow">
+        <input class="text-input" id="nicknameInput" maxlength="16" placeholder="Игрок">
+        <p class="modal-note hidden" id="nicknameLockNote">Никнейм можно указать только один раз. Изменить его сможет только администратор.</p>
+        <button class="btn btn-primary btn-small" id="saveNicknameBtn">Сохранить</button>
+      </div>
+      <h1 class="title">Выбери игру</h1>
+      <p class="subtitle">Две игры про сгущёнку — во что сыграем? 🍯</p>
+      <div class="game-pick-grid">
+        <button class="game-pick" id="pickCatchBtn">
+          <span class="game-pick-emoji">🍯</span>
+          <span class="game-pick-name">Лови сгущёнку!</span>
+          <span class="game-pick-desc">Открывай рот и лови капли</span>
+        </button>
+        <button class="game-pick" id="pickClickerBtn">
+          <span class="game-pick-emoji">🥫</span>
+          <span class="game-pick-name">Кликер сгущёнки</span>
+          <span class="game-pick-desc">Кликай, качайся, автоматизируй</span>
+        </button>
+        <button class="game-pick" id="pickSnakeBtn">
+          <span class="game-pick-emoji">🐍</span>
+          <span class="game-pick-name">Змейка</span>
+          <span class="game-pick-desc">Собирай сгущёнку и расти</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ЭКРАН МЕНЮ (ловилка) -->
+  <section id="menuScreen" class="screen hidden">
+    <div class="menu-card">
+      <button class="btn btn-secondary btn-small back-btn" id="backToSelectBtn">⬅ Выбор игры</button>
+      <h1 class="title">Лови сгущёнку!</h1>
+      <p class="subtitle">Открывай рот и лови вкусные капли варёной сгущёнки 🍯</p>
+      <div class="menu-buttons">
+        <button class="btn btn-primary" id="playBtn">▶ Начать играть</button>
+        <button class="btn btn-secondary" id="recordsBtn">🏆 Рекорды</button>
+        <button class="btn btn-secondary" id="settingsBtn">⚙ Настройки</button>
+      </div>
+      <p class="hint">Двигай ртом пальцем, мышкой или стрелками ← →</p>
+    </div>
+  </section>
+
+  <!-- ЭКРАН ИГРЫ (ловилка) -->
+  <section id="gameScreen" class="screen hidden">
+    <div class="hud">
+      <div class="score-pill">Очки: <span id="scoreValue">0</span></div>
+      <button class="btn btn-small" id="pauseBtn">⏸ Пауза</button>
+      <button class="btn btn-small btn-danger" id="exitBtn">✖ Выход</button>
+    </div>
+    <div class="game-wrap">
+      <canvas id="gameCanvas"></canvas>
+      <div id="pauseOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2>Пауза</h2>
+          <button class="btn btn-primary" id="resumeBtn">▶ Продолжить</button>
+          <button class="btn btn-secondary" id="pauseExitBtn">В меню</button>
+        </div>
+      </div>
+      <div id="gameOverOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2 id="gameOverTitle">💥 Игра окончена!</h2>
+          <p class="final-score">Твой счёт: <span id="finalScore">0</span></p>
+          <p id="newRecordText" class="new-record hidden">🎉 Новый рекорд!</p>
+          <button class="btn btn-primary" id="restartBtn">🔁 Играть снова</button>
+          <button class="btn btn-secondary" id="goMenuBtn">В меню</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ЭКРАН КЛИКЕРА -->
+  <section id="clickerScreen" class="screen hidden">
+    <div class="clicker-wrap">
+      <div class="clicker-header">
+        <button class="btn btn-secondary btn-small" id="clickerBackBtn">⬅ Выбор игры</button>
+        <button class="btn btn-secondary btn-small" id="clickerAchBtn">🏆 Достижения</button>
+        <button class="btn btn-secondary btn-small" id="clickerRestartBtn">🔁 Начать заново</button>
+      </div>
+
+      <div class="clicker-level-pill">
+        <span id="clickerLevelEmoji">🥄</span>
+        <div class="clicker-level-text">
+          <span id="clickerLevelName">Новичок с ложкой</span>
+          <small id="clickerLevelNext"></small>
+        </div>
+      </div>
+
+      <div class="clicker-balance">
+        <div class="clicker-balance-value"><span id="clickerBalance">0</span> <span class="unit">банок</span></div>
+        <div class="clicker-auto-rate">+<span id="clickerAutoRate">0</span>/сек</div>
+      </div>
+
+      <div class="clicker-stage">
+        <div class="clicker-particles" id="clickerParticles"></div>
+        <button id="clickerCan" class="clicker-can" aria-label="Кликни по банке">
+          <img src="img/sgushenka.png" alt="Сгущёнка" id="clickerCanImg">
+        </button>
+      </div>
+
+      <div class="clicker-stats-row">
+        <div class="clicker-stat">💪 Сила клика: <b id="clickerPowerValue">1</b></div>
+        <div class="clicker-stat">👆 Кликов: <b id="clickerClicksValue">0</b></div>
+      </div>
+
+      <h2 class="shop-title">🛒 Прокачка</h2>
+      <p class="modal-note hidden" id="clickerLoadHint" style="text-align:center;color:var(--bad);font-weight:700;">
+        Не удалось загрузить данные кликера. Проверь интернет-соединение или открой раздел «Диагностика» в админке.
+      </p>
+      <div class="clicker-shop" id="clickerShop"></div>
+    </div>
+  </section>
+
+  <!-- ЭКРАН МЕНЮ ЗМЕЙКИ -->
+  <section id="snakeMenuScreen" class="screen hidden">
+    <div class="menu-card">
+      <button class="btn btn-secondary btn-small back-btn" id="snakeBackToSelectBtn">⬅ Выбор игры</button>
+      <h1 class="title">🐍 Змейка</h1>
+      <p class="subtitle">Собирай сгущёнку и расти — не врежься в стену, себя или бомбу!</p>
+
+      <div class="clicker-level-pill">
+        <span id="snakeLevelEmoji">🥄</span>
+        <div class="clicker-level-text">
+          <span id="snakeLevelName">Новичок-змейка</span>
+          <small id="snakeLevelNext"></small>
+        </div>
+      </div>
+
+      <h2 style="margin-top:18px;font-size:1.05rem;text-align:center;">Выбери сложность</h2>
+      <div class="game-pick-grid" style="margin-top:8px;">
+        <button class="game-pick" id="snakeEasyBtn">
+          <span class="game-pick-emoji">🥄</span>
+          <span class="game-pick-name">Лёгкий</span>
+          <span class="game-pick-desc">Обычная змейка</span>
+        </button>
+        <button class="game-pick" id="snakeHardBtn">
+          <span class="game-pick-emoji">💣</span>
+          <span class="game-pick-name">Сложный</span>
+          <span class="game-pick-desc">Плюс бомбы на карте</span>
+        </button>
+      </div>
+
+      <div class="menu-buttons" style="margin-top:16px;">
+        <button class="btn btn-secondary" id="snakeRecordsBtn">🏆 Рекорды</button>
+        <button class="btn btn-secondary" id="snakeProfileBtn">🏅 Профиль и достижения</button>
+      </div>
+      <p class="hint">На телефоне — свайпай пальцем по полю, на компьютере — стрелки или WASD</p>
+    </div>
+  </section>
+
+  <!-- ЭКРАН ИГРЫ ЗМЕЙКА -->
+  <section id="snakeGameScreen" class="screen hidden">
+    <div class="hud" id="snakeHud">
+      <div class="score-pill">Очки: <span id="snakeScoreValue">0</span></div>
+      <div class="score-pill" id="snakeDiffPill">🥄 Лёгкий</div>
+      <button class="btn btn-small" id="snakePauseBtn">⏸ Пауза</button>
+      <button class="btn btn-small btn-danger" id="snakeExitBtn">✖ Выход</button>
+    </div>
+    <div class="game-wrap snake-wrap" id="snakeGameWrap">
+      <canvas id="snakeCanvas"></canvas>
+      <div id="snakePauseOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2>Пауза</h2>
+          <button class="btn btn-primary" id="snakeResumeBtn">▶ Продолжить</button>
+          <button class="btn btn-secondary" id="snakePauseExitBtn">В меню</button>
+        </div>
+      </div>
+      <div id="snakeGameOverOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2 id="snakeGameOverTitle">💥 Игра окончена!</h2>
+          <p class="final-score">Твой счёт: <span id="snakeFinalScore">0</span></p>
+          <p id="snakeNewRecordText" class="new-record hidden">🎉 Новый рекорд!</p>
+          <button class="btn btn-primary" id="snakeRestartBtn">🔁 Играть снова</button>
+          <button class="btn btn-secondary" id="snakeGoMenuBtn">В меню</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- МОДАЛКА: РЕКОРДЫ -->
+<div class="modal hidden" id="recordsModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="recordsModal">✖</button>
+    <h2>🏆 Таблица рекордов</h2>
+    <p class="modal-note">Общий рейтинг всех игроков.</p>
+    <ol class="records-list" id="recordsList"></ol>
+  </div>
+</div>
+
+<!-- МОДАЛКА: НАСТРОЙКИ -->
+<div class="modal hidden" id="settingsModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="settingsModal">✖</button>
+    <h2>⚙ Настройки</h2>
+
+    <div class="toggle-row">
+      <span>Звуки</span>
+      <button class="toggle" id="sfxToggle" data-on="true">Вкл</button>
+    </div>
+    <div class="toggle-row">
+      <span>Музыка</span>
+      <button class="toggle" id="musicToggle" data-on="true">Вкл</button>
+    </div>
+
+    <button class="btn btn-primary" id="saveSettingsBtn">Сохранить</button>
+  </div>
+</div>
+
+<!-- МОДАЛКА: СПИСОК НОВОСТЕЙ -->
+<div class="modal hidden" id="newsModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="newsModal">✖</button>
+    <h2>📰 Новости</h2>
+    <div class="news-list" id="newsList"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: ЧТЕНИЕ ОДНОЙ НОВОСТИ -->
+<div class="modal hidden" id="newsReaderModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="newsReaderModal">✖</button>
+    <h2 id="readerTitle"></h2>
+    <time id="readerDate" class="modal-note"></time>
+    <div class="reader-text" id="readerText"></div>
+    <div class="reactions-row" id="reactionsRow">
+      <button class="reaction-btn" data-reaction="likes">👍 <span id="likesCount">0</span></button>
+      <button class="reaction-btn" data-reaction="dislikes">👎 <span id="dislikesCount">0</span></button>
+      <button class="reaction-btn" data-reaction="sgushenka">
+    <img src="img/sgushenka.png" alt="Сгущёнка" width="28" height="28">
+    <span id="sgushenkaCount">0</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: ПРОФИЛЬ, УРОВЕНЬ И ДОСТИЖЕНИЯ САЙТА -->
+<div class="modal hidden" id="profileModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="profileModal">✖</button>
+    <h2>🏅 Твой профиль</h2>
+    <div class="profile-level-block">
+      <div class="profile-level-emoji" id="profileBadgeEmojiBig">🥄</div>
+      <div>
+        <div class="profile-level-name" id="profileLevelName">Любитель сгущёнки</div>
+        <div class="profile-points-note"><span id="profilePoints">0</span> очков</div>
+      </div>
+    </div>
+    <div class="level-bar"><div class="level-bar-fill" id="profileBarFill"></div></div>
+    <p class="modal-note" id="profileNextLevel"></p>
+
+    <h2 style="margin-top:22px;">🏆 Достижения</h2>
+    <div class="ach-grid" id="achievementsGrid"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: ДОСТИЖЕНИЯ КЛИКЕРА -->
+<div class="modal hidden" id="clickerAchModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="clickerAchModal">✖</button>
+    <h2>🏆 Достижения кликера</h2>
+    <div class="ach-grid" id="clickerAchGrid"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: РЕКОРДЫ ЗМЕЙКИ (2 вкладки) -->
+<div class="modal hidden" id="snakeRecordsModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="snakeRecordsModal">✖</button>
+    <h2>🏆 Рекорды змейки</h2>
+    <div class="records-tabs">
+      <button class="records-tab active" data-snaketab="easy">🥄 Лёгкий</button>
+      <button class="records-tab" data-snaketab="hard">💣 Сложный</button>
+    </div>
+    <ol class="records-list" id="snakeRecordsListEasy"></ol>
+    <ol class="records-list hidden" id="snakeRecordsListHard"></ol>
+  </div>
+</div>
+
+<!-- МОДАЛКА: ПРОФИЛЬ, УРОВЕНЬ И ДОСТИЖЕНИЯ ЗМЕЙКИ -->
+<div class="modal hidden" id="snakeProfileModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="snakeProfileModal">✖</button>
+    <h2>🏅 Профиль змейки</h2>
+    <div class="profile-level-block">
+      <div class="profile-level-emoji" id="snakeProfileEmoji">🥄</div>
+      <div>
+        <div class="profile-level-name" id="snakeProfileLevelName">Новичок-змейка</div>
+        <div class="profile-points-note"><span id="snakeProfileCaught">0</span> банок поймано</div>
+      </div>
+    </div>
+    <div class="level-bar"><div class="level-bar-fill" id="snakeProfileBarFill"></div></div>
+    <p class="modal-note" id="snakeProfileNextLevel"></p>
+
+    <h2 style="margin-top:22px;">🏆 Достижения</h2>
+    <div class="ach-grid" id="snakeAchievementsGrid"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: СЛУЧАЙНОЕ СОБЫТИЕ -->
+<div class="modal hidden" id="eventModal">
+  <div class="modal-card event-card">
+    <button class="modal-close" data-close="eventModal">✖</button>
+    <div class="event-emoji" id="eventEmoji">🥫</div>
+    <h2 id="eventTitle">СРОЧНО!</h2>
+    <p id="eventText" class="event-text"></p>
+    <button class="btn btn-primary" data-close="eventModal" style="width:100%;margin-top:14px;">Понял!</button>
+  </div>
+</div>
+
+<!-- ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ О ДОСТИЖЕНИИ -->
+<div class="ach-toast hidden" id="achievementToast">
+  <span class="ach-toast-emoji" id="toastEmoji">🏆</span>
+  <div>
+    <div class="ach-toast-label">Новое достижение!</div>
+    <div class="ach-toast-title" id="toastTitle"></div>
+  </div>
+</div>
+
+<audio id="bgMusic" loop></audio>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="db.js"></script>
+<script src="player.js"></script>
+<script src="defaults.js"></script>
+<script src="profile.js"></script>
+<script src="events.js"></script>
+<script src="clicker.js"></script>
+<script src="snake.js"></script>
+<script src="script.js"></script>
+</body>
+</html>

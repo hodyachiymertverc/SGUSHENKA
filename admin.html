@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Админ-панель — Новости</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .admin-wrap{ max-width:600px; margin:4vh auto; padding:0 16px 40px; position:relative; z-index:2; }
+  .admin-card{ background:var(--white); border-radius:24px; padding:26px 22px; border:4px solid var(--gold); box-shadow:0 12px 0 var(--shadow); margin-top:18px; }
+  textarea.text-input{ min-height:110px; resize:vertical; font-family:inherit; }
+  .admin-list-item{ background:var(--cream); border-radius:14px; padding:12px 14px; margin-top:10px; }
+  .admin-list-item .row{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .admin-list-item .info{ flex:1; min-width:0; overflow-wrap:break-word; }
+  .admin-list-item .actions{ display:flex; gap:6px; flex-wrap:wrap; }
+  .mini-btn{ border:none; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:700; font-size:0.85rem; }
+  .view-btn{ background:var(--white); border:2px solid #EADFC8; }
+  .del-btn{ background:#FFDCD6; color:#B23A28; }
+  .reaction-edit-row{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .reaction-edit-row label{ display:flex; flex-direction:column; font-size:0.8rem; font-weight:700; flex:1; min-width:70px; }
+  .reaction-edit-row input{ width:100%; padding:8px; border-radius:8px; border:2px solid #EADFC8; margin-top:4px; }
+  .save-reactions-btn{ margin-top:10px; width:100%; }
+  .status-badge{ display:inline-block; font-size:0.75rem; padding:2px 8px; border-radius:10px; background:#E6F4EA; color:#2C7A3D; margin-bottom:8px; font-weight:700; }
+  .status-badge.offline{ background:#FFF1DC; color:#8B5A2B; }
+
+  /* ---- редактируемые коллекции (уровни/достижения/события/кликер) ---- */
+  details.admin-card{ padding:18px 22px; }
+  details.admin-card summary{ cursor:pointer; list-style:none; }
+  details.admin-card summary::-webkit-details-marker{ display:none; }
+  details.admin-card summary::before{ content:'▸ '; color:var(--pink); }
+  details.admin-card[open] summary::before{ content:'▾ '; }
+  .cfg-form{ background:var(--cream); border-radius:14px; padding:12px; margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap:8px 10px; }
+  .cfg-form.hidden{ display:none; }
+  .cfg-form .cfg-field{ display:flex; flex-direction:column; font-size:0.78rem; font-weight:700; }
+  .cfg-form .cfg-field.wide{ grid-column: 1 / -1; }
+  .cfg-form input, .cfg-form select, .cfg-form textarea{ margin-top:4px; padding:8px; border-radius:8px; border:2px solid #EADFC8; font-family:inherit; font-size:0.9rem; }
+  .cfg-form textarea{ min-height:60px; resize:vertical; }
+  .cfg-form .cfg-check{ flex-direction:row; align-items:center; gap:6px; }
+  .cfg-form-actions{ grid-column: 1 / -1; display:flex; gap:8px; margin-top:4px; }
+  .cfg-item-title{ font-family:'Baloo 2',sans-serif; font-weight:800; }
+  .cfg-item-sub{ font-size:0.78rem; color:#8a6a45; margin-top:2px; }
+  .save-btn{ background:#DFF3E1; color:#2C7A3D; }
+
+  /* ---- вкладки по играм ---- */
+  .admin-tabs{ display:flex; gap:8px; margin-top:20px; flex-wrap:wrap; }
+  .admin-tab{
+    flex:1; min-width:120px; border:3px solid var(--gold); background:var(--white);
+    color:var(--caramel-dark); font-family:'Baloo 2',sans-serif; font-weight:800;
+    padding:10px 8px; border-radius:14px; cursor:pointer; font-size:0.9rem;
+  }
+  .admin-tab.active{ background: linear-gradient(180deg,#FFCE54,var(--gold)); box-shadow: 0 4px 0 #C68F00; }
+  .admin-tab-panel.hidden{ display:none; }
+
+  /* ---- диагностика подключения ---- */
+  .diag-item{
+    display:flex; align-items:center; gap:10px; padding:8px 10px;
+    background:var(--cream); border-radius:10px; margin-top:6px; font-size:0.85rem; font-weight:700;
+  }
+  .diag-dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; background:#C9C2AE; }
+  .diag-item.ok .diag-dot{ background:#2C7A3D; }
+  .diag-item.fail .diag-dot{ background:#B23A28; }
+  .diag-item .diag-name{ flex:1; }
+  .diag-item .diag-msg{ font-weight:600; font-size:0.75rem; color:#B23A28; }
+</style>
+</head>
+<body>
+
+<div class="sky">
+  <div class="cloud cloud1"></div>
+  <div class="cloud cloud2"></div>
+</div>
+
+<div class="admin-wrap">
+  <div class="admin-card" id="lockCard" style="margin-top:6vh;">
+    <h2>🔒 Вход в админ-панель</h2>
+    <p class="modal-note">Пароль хранится отдельно, в файле admin-config.js (не публикуется в открытом репозитории — см. SETUP-SECRETS.md).</p>
+    <input class="text-input" type="password" id="passInput" placeholder="Пароль">
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;margin-top:14px;">Войти</button>
+    <p id="loginError" class="hidden" style="color:var(--bad);font-weight:700;">Неверный пароль</p>
+  </div>
+
+  <div class="hidden" id="panelWrap">
+    <span class="status-badge" id="statusBadge">Проверка подключения…</span>
+
+    <details class="admin-card" id="diagCard">
+      <summary><h2 style="display:inline;">🩺 Диагностика подключения</h2></summary>
+      <p class="modal-note">Проверка доступа на чтение/запись по каждому разделу. Если строка красная — не работает именно этот раздел (например кликер), и обычно дело в правилах Firebase — под списком будет подсказка, что вставить.</p>
+      <div id="diagList"></div>
+      <pre id="diagRulesHint" class="hidden" style="background:#2b2b2b;color:#eee;padding:10px;border-radius:10px;font-size:0.72rem;overflow:auto;margin-top:10px;"></pre>
+    </details>
+
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-tab="news">📰 Новости</button>
+      <button class="admin-tab" data-tab="catch">🍯 Лови сгущёнку!</button>
+      <button class="admin-tab" data-tab="clicker">🥫 Кликер сгущёнки</button>
+      <button class="admin-tab" data-tab="snake">🐍 Змейка</button>
+    </div>
+
+    <!-- ===================== ВКЛАДКА: НОВОСТИ ===================== -->
+    <div class="admin-tab-panel" data-panel="news">
+      <div class="admin-card">
+        <h2>📰 Опубликовать новость</h2>
+        <label class="field-label">Заголовок</label>
+        <input class="text-input" id="titleInput" maxlength="80" placeholder="Например: Новое обновление!">
+        <label class="field-label">Текст новости</label>
+        <textarea class="text-input" id="textInput"  placeholder="Расскажи, что нового..."></textarea>
+        <button class="btn btn-primary" id="publishBtn" style="width:100%;margin-top:14px;">🚀 Опубликовать</button>
+      </div>
+
+      <div class="admin-card">
+        <h2>Опубликованные новости</h2>
+        <div id="adminNewsList"></div>
+      </div>
+    </div>
+
+    <!-- ===================== ВКЛАДКА: ЛОВИ СГУЩЁНКУ ===================== -->
+    <div class="admin-tab-panel hidden" data-panel="catch">
+      <div class="admin-card">
+        <h2>🏆 Управление рекордами</h2>
+        <button class="btn btn-danger btn-small" id="clearAllRecordsBtn">Очистить все рекорды</button>
+        <div id="adminRecordsList"></div>
+      </div>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🥄 Уровни игрока (по очкам)</h2></summary>
+        <p class="modal-note">Диапазоны очков определяют звание игрока на сайте (не в кликере).</p>
+        <div id="levelsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="levelsAddBtn" style="margin-top:8px;">+ Добавить уровень</button>
+        <div id="levelsList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🏆 Достижения (общие)</h2></summary>
+        <p class="modal-note">Условие проверяется автоматически по накопленной статистике игрока.</p>
+        <div id="achievementsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="achievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
+        <div id="achievementsList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🥫 Случайные события</h2></summary>
+        <p class="modal-note">При каждом открытии сайта для каждого включённого события кидается кубик по его шансу (%).</p>
+        <div id="eventsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="eventsAddBtn" style="margin-top:8px;">+ Добавить событие</button>
+        <div id="eventsList" style="margin-top:12px;"></div>
+      </details>
+    </div>
+
+    <!-- ===================== ВКЛАДКА: КЛИКЕР ===================== -->
+    <div class="admin-tab-panel hidden" data-panel="clicker">
+      <details class="admin-card" open>
+        <summary><h2 style="display:inline;">🥫 Балансы игроков</h2></summary>
+        <input class="text-input" id="clickerPlayersSearch" placeholder="Поиск по никнейму…" style="margin-top:8px;">
+        <div id="clickerPlayersList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🛒 Прокачки</h2></summary>
+        <p class="modal-note">Цена прокачки растёт: цена = базовая × (рост ^ текущий уровень).</p>
+        <div id="clickerUpgradesAddForm"></div>
+        <button class="btn btn-primary btn-small" id="clickerUpgradesAddBtn" style="margin-top:8px;">+ Добавить прокачку</button>
+        <div id="clickerUpgradesList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">📈 Уровни кликера</h2></summary>
+        <p class="modal-note">Диапазоны считаются от суммарно заработанных банок (не от текущего баланса).</p>
+        <div id="clickerLevelsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="clickerLevelsAddBtn" style="margin-top:8px;">+ Добавить уровень</button>
+        <div id="clickerLevelsList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🏆 Достижения кликера</h2></summary>
+        <div id="clickerAchievementsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="clickerAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
+        <div id="clickerAchievementsList" style="margin-top:12px;"></div>
+      </details>
+    </div>
+
+    <!-- ===================== ВКЛАДКА: ЗМЕЙКА ===================== -->
+    <div class="admin-tab-panel hidden" data-panel="snake">
+      <div class="admin-card">
+        <h2>🏆 Рекорды — лёгкий уровень</h2>
+        <p class="modal-note">Отдельная таблица рекордов для лёгкого режима змейки.</p>
+        <button class="btn btn-danger btn-small" id="clearSnakeEasyBtn">Очистить рекорды (лёгкий)</button>
+        <div id="adminSnakeRecordsEasy"></div>
+      </div>
+
+      <div class="admin-card">
+        <h2>🏆 Рекорды — сложный уровень</h2>
+        <p class="modal-note">Отдельная таблица рекордов для сложного режима змейки (с бомбами).</p>
+        <button class="btn btn-danger btn-small" id="clearSnakeHardBtn">Очистить рекорды (сложный)</button>
+        <div id="adminSnakeRecordsHard"></div>
+      </div>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">📈 Уровни змейки</h2></summary>
+        <p class="modal-note">Диапазоны считаются от суммарно пойманных банок за все игры (обе сложности вместе).</p>
+        <div id="snakeLevelsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="snakeLevelsAddBtn" style="margin-top:8px;">+ Добавить уровень</button>
+        <div id="snakeLevelsList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🏆 Достижения змейки</h2></summary>
+        <p class="modal-note">Условие проверяется автоматически по накопленной статистике игрока в змейке.</p>
+        <div id="snakeAchievementsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="snakeAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
+        <div id="snakeAchievementsList" style="margin-top:12px;"></div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка чтения новости в админке -->
+<div class="modal hidden" id="adminReaderModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="adminReaderModal">✖</button>
+    <h2 id="adminReaderTitle"></h2>
+    <time id="adminReaderDate" class="modal-note"></time>
+    <div class="reader-text" id="adminReaderText"></div>
+
+    <h2 style="margin-top:20px;font-size:1.1rem;">Реакции (можно изменить вручную)</h2>
+    <div class="reaction-edit-row">
+      <label>👍 Лайки <input type="number" min="0" id="editLikes"></label>
+      <label>👎 Дизлайки <input type="number" min="0" id="editDislikes"></label>
+      <label>🥫 Сгущёнка <input type="number" min="0" id="editSgushenka"></label>
+    </div>
+    <button class="btn btn-primary save-reactions-btn" id="saveReactionsBtn">Сохранить реакции</button>
+    <button class="btn btn-danger btn-small" id="deleteFromReaderBtn" style="width:100%;margin-top:10px;">Удалить новость</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="db.js"></script>
+<script src="defaults.js"></script>
+<script src="admin-config.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>
