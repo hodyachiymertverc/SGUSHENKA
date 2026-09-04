@@ -493,6 +493,9 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 
 .ttt-stats-row{ display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
 
+#tttTimerPill{ transition: background .2s ease, color .2s ease; }
+#tttTimerPill.ttt-timer-warn{ background: var(--bad); color: #fff; }
+
 .ttt-spinner{
   width:46px; height:46px; margin: 18px auto 4px;
   border:6px solid #EADFC8; border-top-color: var(--gold); border-radius:50%;
