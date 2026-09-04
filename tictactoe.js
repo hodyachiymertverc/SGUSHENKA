@@ -37,7 +37,7 @@ function escapeHtmlT(str){
 function tttShow(el){ if(el) el.classList.remove('hidden'); }
 function tttHide(el){ if(el) el.classList.add('hidden'); }
 
-const TTT_MARK_SRC = { X: 'img/X.png', O: 'img/O.png' };
+const TTT_MARK_SRC = { X: 'img/x.png', O: 'img/o.png' };
 const TTT_MOVE_SECONDS = 30;
 
 const TTT_WIN_LINES = [
