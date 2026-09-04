@@ -689,12 +689,34 @@ const TicTacToe = {
   // пока сидим в списке ожидания, слушаем и партии — вдруг кто-то
   // выбрал НАС из своего списка
   handleGamesUpdate(list){
+    this.purgeStaleGames(list);
     if(this.onlineGameId) return;
     const mine = list.find(g=> g.status === 'playing' && g.players && (
       (g.players.X && g.players.X.id === this.playerId) ||
       (g.players.O && g.players.O.id === this.playerId)
     ));
     if(mine) this.joinOnlineGame(mine.id);
+  },
+  // дополнительная защита от "призрачных" партий: если игрок закрыл
+  // вкладку/приложение так резко, что не сработали ни pagehide, ни
+  // beforeunload, ни setTimeout из scheduleFinishedGameCleanup (например,
+  // процесс был убит системой), запись в tttGames может остаться висеть
+  // навсегда — 'finished' и никогда не удалиться, либо 'playing' без
+  // единого хода долгое время. Раз в обновление списка партий чистим и
+  // такие записи, а не только записи из tttLobby — чтобы одна и та же
+  // "комната" не продолжала висеть в базе бесконечно.
+  purgeStaleGames(list){
+    if(!window.DB) return;
+    const now = Date.now();
+    (list || []).forEach(g=>{
+      if(this.onlineGameId === g.id) return; // не трогаем свою активную партию
+      const last = g.moveTs || g.createdTs || 0;
+      const isStaleFinished = g.status === 'finished' && now - last >= 15000;
+      const isAbandonedPlaying = g.status === 'playing' && now - last >= 300000;
+      if(isStaleFinished || isAbandonedPlaying){
+        DB.deleteItem('tttGames', g.id);
+      }
+    });
   },
   joinOnlineGame(gameId){
     if(this.onlineGameId) return;

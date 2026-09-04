@@ -31,6 +31,8 @@ let currentRecordsList = [];
 
 let unsubSnakeEasy = null;
 let unsubSnakeHard = null;
+let unsubSnakeMedium = null;
+let unsubSnakeOnline = null;
 let currentSnakeEasyList = [];
 let currentSnakeHardList = [];
 
@@ -64,6 +66,12 @@ function tryLogin(){
     unsubSnakeHard = DB.watchRecordsIn('snakeRecordsHard', list=>{
       currentSnakeHardList = list;
       renderAdminSnakeRecords('adminSnakeRecordsHard', list, 'snakeRecordsHard');
+    });
+    unsubSnakeMedium = DB.watchRecordsIn('snakeRecordsMedium', list=>{
+      renderAdminSnakeRecords('adminSnakeRecordsMedium', list, 'snakeRecordsMedium');
+    });
+    unsubSnakeOnline = DB.watchRecordsIn('snakeRecordsOnline', list=>{
+      renderAdminSnakeRecords('adminSnakeRecordsOnline', list, 'snakeRecordsOnline');
     });
     unsubDoodleRecords = DB.watchRecordsIn('doodleRecords', list=>{
       currentDoodleRecordsList = list;
@@ -254,35 +262,43 @@ document.getElementById('clearAllRecordsBtn').addEventListener('click', ()=>{
   }
 });
 
-/* ---------------- ЗМЕЙКА: рекорды (лёгкий/сложный) ---------------- */
-const snakeEasyRecordsState = { editingId: null };
-const snakeHardRecordsState = { editingId: null };
+/* ---------------- ЗМЕЙКА: рекорды (лёгкий/средний/сложный/онлайн) ----------------
+   Раньше здесь были отдельные переменные и функции под каждую сложность —
+   теперь один общий реестр по имени коллекции, чтобы легко добавлять новые
+   режимы (например, средний уровень и онлайн), не дублируя код. */
+const snakeRecordsRegistry = {
+  snakeRecordsEasy:   { list: [], state: { editingId: null }, containerId: 'adminSnakeRecordsEasy' },
+  snakeRecordsMedium: { list: [], state: { editingId: null }, containerId: 'adminSnakeRecordsMedium' },
+  snakeRecordsHard:   { list: [], state: { editingId: null }, containerId: 'adminSnakeRecordsHard' },
+  snakeRecordsOnline: { list: [], state: { editingId: null }, containerId: 'adminSnakeRecordsOnline' }
+};
 function renderAdminSnakeRecords(containerId, list, collectionName){
+  const entry = snakeRecordsRegistry[collectionName];
+  if(!entry) return;
+  entry.list = list;
+  if(collectionName === 'snakeRecordsEasy') currentSnakeEasyList = list;
   if(collectionName === 'snakeRecordsHard') currentSnakeHardList = list;
-  else currentSnakeEasyList = list;
-  const state = collectionName === 'snakeRecordsHard' ? snakeHardRecordsState : snakeEasyRecordsState;
   renderRecordsAdmin(containerId, list, {
     updateFn: (id, patch)=> DB.updateRecordIn(collectionName, id, patch),
     deleteFn: (id)=> DB.deleteRecordIn(collectionName, id),
-    state,
-    rerender: ()=> renderAdminSnakeRecords(
-      containerId,
-      collectionName === 'snakeRecordsHard' ? currentSnakeHardList : currentSnakeEasyList,
-      collectionName
-    )
+    state: entry.state,
+    rerender: ()=> renderAdminSnakeRecords(containerId, entry.list, collectionName)
   });
 }
 
-document.getElementById('clearSnakeEasyBtn').addEventListener('click', ()=>{
-  if(confirm('Точно очистить ВСЕ рекорды лёгкого уровня змейки?')){
-    DB.clearRecordsIn('snakeRecordsEasy', currentSnakeEasyList);
-  }
-});
-document.getElementById('clearSnakeHardBtn').addEventListener('click', ()=>{
-  if(confirm('Точно очистить ВСЕ рекорды сложного уровня змейки?')){
-    DB.clearRecordsIn('snakeRecordsHard', currentSnakeHardList);
-  }
-});
+function bindClearSnakeBtn(btnId, collectionName, label){
+  const btn = document.getElementById(btnId);
+  if(!btn) return;
+  btn.addEventListener('click', ()=>{
+    if(confirm(`Точно очистить ВСЕ рекорды (${label}) змейки?`)){
+      DB.clearRecordsIn(collectionName, snakeRecordsRegistry[collectionName].list);
+    }
+  });
+}
+bindClearSnakeBtn('clearSnakeEasyBtn', 'snakeRecordsEasy', 'лёгкий уровень');
+bindClearSnakeBtn('clearSnakeMediumBtn', 'snakeRecordsMedium', 'средний уровень');
+bindClearSnakeBtn('clearSnakeHardBtn', 'snakeRecordsHard', 'сложный уровень');
+bindClearSnakeBtn('clearSnakeOnlineBtn', 'snakeRecordsOnline', 'онлайн');
 
 /* ---------------- DOODLE-ПРЫЖКИ: рекорды ---------------- */
 const doodleRecordsState = { editingId: null };
@@ -601,7 +617,7 @@ function mountAllConfigSections(){
   });
 
   /* ---- достижения змейки ---- */
-  const snakeAchTypeLabels = { caught:'банок поймано всего', games:'игр сыграно', bestEasy:'рекорд (лёгкий)', bestHard:'рекорд (сложный)' };
+  const snakeAchTypeLabels = { caught:'банок поймано всего', games:'игр сыграно', bestEasy:'рекорд (лёгкий)', bestMedium:'рекорд (средний)', bestHard:'рекорд (сложный)', bestOnline:'рекорд (онлайн)' };
   mountConfigSection({
     collection: 'snakeAchievements',
     addFormElId: 'snakeAchievementsAddForm', addBtnId: 'snakeAchievementsAddBtn', listElId: 'snakeAchievementsList',
@@ -612,7 +628,8 @@ function mountAllConfigSections(){
       { key:'title', label:'Название', type:'text', default:'' },
       { key:'desc',  label:'Описание', type:'textarea', default:'' },
       { key:'type',  label:'Тип условия', type:'select', default:'caught', options: [
-        ['caught','Банок поймано всего'], ['games','Игр сыграно'], ['bestEasy','Рекорд на лёгком уровне'], ['bestHard','Рекорд на сложном уровне']
+        ['caught','Банок поймано всего'], ['games','Игр сыграно'], ['bestEasy','Рекорд на лёгком уровне'],
+        ['bestMedium','Рекорд на среднем уровне'], ['bestHard','Рекорд на сложном уровне'], ['bestOnline','Рекорд в онлайне']
       ]},
       { key:'target', label:'Нужное значение', type:'number', default:1 }
     ],
@@ -996,7 +1013,11 @@ const DIAG_COLLECTIONS = [
   { name: 'snakeAchievements',   label: 'Змейка: достижения' },
   { name: 'snakePlayers',        label: 'Змейка: профили игроков' },
   { name: 'snakeRecordsEasy',    label: 'Змейка: рекорды (лёгкий)' },
+  { name: 'snakeRecordsMedium',  label: 'Змейка: рекорды (средний)' },
   { name: 'snakeRecordsHard',    label: 'Змейка: рекорды (сложный)' },
+  { name: 'snakeRecordsOnline',  label: 'Змейка: рекорды (онлайн)' },
+  { name: 'snakeRooms',          label: 'Змейка: онлайн-комнаты' },
+  { name: 'snakeOnlinePlayers',  label: 'Змейка: онлайн-игроки' },
   { name: 'doodleLevels',        label: 'Doodle-прыжки: уровни' },
   { name: 'doodleAchievements',  label: 'Doodle-прыжки: достижения' },
   { name: 'doodlePlayers',       label: 'Doodle-прыжки: профили игроков' },
@@ -1056,7 +1077,8 @@ async function runDiagnostics(){
 для каждого раздела: levels, achievements, events, profiles,
 clickerLevels, clickerAchievements, clickerUpgrades, clickerPlayers,
 snakeLevels, snakeAchievements, snakePlayers, snakeRecordsEasy,
-snakeRecordsHard, doodleLevels, doodleAchievements, doodlePlayers,
+snakeRecordsMedium, snakeRecordsHard, snakeRecordsOnline, snakeRooms,
+snakeOnlinePlayers, doodleLevels, doodleAchievements, doodlePlayers,
 doodleRecords — по аналогии с тем, как уже разрешены records и news).`;
   } else if(hintEl){
     hintEl.classList.add('hidden');

@@ -180,38 +180,77 @@
         </div>
       </div>
 
-      <h2 style="margin-top:18px;font-size:1.05rem;text-align:center;">Выбери сложность</h2>
-      <div class="game-pick-grid" style="margin-top:8px;">
+      <h2 style="margin-top:18px;font-size:1.05rem;text-align:center;">Против ботов</h2>
+      <div class="game-pick-grid game-pick-grid-3" style="margin-top:8px;">
         <button class="game-pick" id="snakeEasyBtn">
           <span class="game-pick-emoji">🥄</span>
           <span class="game-pick-name">Лёгкий</span>
-          <span class="game-pick-desc">Обычная змейка</span>
+          <span class="game-pick-desc">Мало ботов, спокойно</span>
+        </button>
+        <button class="game-pick" id="snakeMediumBtn">
+          <span class="game-pick-emoji">🐍</span>
+          <span class="game-pick-name">Средний</span>
+          <span class="game-pick-desc">Больше ботов и скорость</span>
         </button>
         <button class="game-pick" id="snakeHardBtn">
           <span class="game-pick-emoji">💣</span>
           <span class="game-pick-name">Сложный</span>
-          <span class="game-pick-desc">Плюс бомбы на карте</span>
+          <span class="game-pick-desc">Много ботов, охотятся на тебя</span>
         </button>
+      </div>
+
+      <h2 style="margin-top:18px;font-size:1.05rem;text-align:center;">Онлайн</h2>
+      <div class="menu-buttons" style="margin-top:8px;">
+        <button class="btn btn-primary" id="snakeOnlineBtn">🌐 Играть онлайн</button>
       </div>
 
       <div class="menu-buttons" style="margin-top:16px;">
         <button class="btn btn-secondary" id="snakeRecordsBtn">🏆 Рекорды</button>
         <button class="btn btn-secondary" id="snakeProfileBtn">🏅 Профиль и достижения</button>
       </div>
-      <p class="hint">На телефоне — свайпай пальцем по полю, на компьютере — стрелки или WASD</p>
+      <p class="hint">На телефоне — веди пальцем по полю и жми кнопку ускорения слева снизу. На компьютере — веди мышкой, ЛКМ — ускорение.</p>
     </div>
   </section>
 
+  <!-- МОДАЛКА: ПОИСК/СОЗДАНИЕ ОНЛАЙН-КОМНАТЫ ЗМЕЙКИ -->
+  <div class="modal hidden" id="snakeOnlineModal">
+    <div class="modal-card" style="text-align:center;">
+      <button class="modal-close" id="snakeOnlineCancelBtn">✖</button>
+      <h2>🌐 Онлайн-комната</h2>
+      <p class="modal-note" id="snakeOnlineStatusText">Ищем свободную комнату…</p>
+      <div class="ttt-spinner" id="snakeOnlineSpinner"></div>
+      <p class="modal-note">Код комнаты: <b id="snakeOnlineRoomCode">—</b></p>
+      <p class="modal-note">Игроков в комнате: <span id="snakeOnlineRoomCount">1</span></p>
+      <div class="join-row" style="margin-top:10px;">
+        <input class="text-input" id="snakeOnlineJoinInput" maxlength="8" placeholder="Код комнаты друга">
+        <button class="btn btn-secondary btn-small" id="snakeOnlineJoinBtn">Войти по коду</button>
+      </div>
+      <button class="btn btn-primary" id="snakeOnlineStartBtn" style="margin-top:14px;">▶ Начать игру</button>
+      <button class="btn btn-secondary" id="snakeOnlineCancelBtn2" style="margin-top:8px;">Отмена</button>
+    </div>
+  </div>
+
   <!-- ЭКРАН ИГРЫ ЗМЕЙКА -->
   <section id="snakeGameScreen" class="screen hidden">
-    <div class="hud" id="snakeHud">
-      <div class="score-pill">Очки: <span id="snakeScoreValue">0</span></div>
-      <div class="score-pill" id="snakeDiffPill">🥄 Лёгкий</div>
-      <button class="btn btn-small" id="snakePauseBtn">⏸ Пауза</button>
-      <button class="btn btn-small btn-danger" id="snakeExitBtn">✖ Выход</button>
-    </div>
     <div class="game-wrap snake-wrap" id="snakeGameWrap">
       <canvas id="snakeCanvas"></canvas>
+
+      <button class="snake-io-btn snake-io-back" id="snakeExitBtn" title="Выход">⬅</button>
+      <button class="snake-io-btn snake-io-pause" id="snakePauseBtn" title="Пауза">⏸</button>
+
+      <div class="snake-io-center" id="snakeCenterHud">
+        <div class="snake-io-diff" id="snakeDiffPill">🥄 Лёгкий</div>
+        <div class="snake-io-score" id="snakeScoreValue">0</div>
+      </div>
+
+      <div class="snake-io-leaderboard" id="snakeLeaderboard">
+        <div class="snake-io-lb-title">🏆 Таблица</div>
+        <ol class="snake-io-lb-list" id="snakeLeaderboardList"></ol>
+        <div class="snake-io-lb-me" id="snakeLeaderboardMe"></div>
+      </div>
+
+      <button class="snake-io-boost" id="snakeBoostBtn">⚡</button>
+
       <div id="snakePauseOverlay" class="overlay hidden">
         <div class="overlay-card">
           <h2>Пауза</h2>
@@ -454,10 +493,14 @@
     <h2>🏆 Рекорды змейки</h2>
     <div class="records-tabs">
       <button class="records-tab active" data-snaketab="easy">🥄 Лёгкий</button>
+      <button class="records-tab" data-snaketab="medium">🐍 Средний</button>
       <button class="records-tab" data-snaketab="hard">💣 Сложный</button>
+      <button class="records-tab" data-snaketab="online">🌐 Онлайн</button>
     </div>
     <ol class="records-list" id="snakeRecordsListEasy"></ol>
+    <ol class="records-list hidden" id="snakeRecordsListMedium"></ol>
     <ol class="records-list hidden" id="snakeRecordsListHard"></ol>
+    <ol class="records-list hidden" id="snakeRecordsListOnline"></ol>
   </div>
 </div>
 

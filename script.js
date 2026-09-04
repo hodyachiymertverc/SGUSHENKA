@@ -94,7 +94,12 @@ document.querySelectorAll('.modal').forEach(modal=>{
   // оставит "призрачную" запись в списке ожидающих игроков — поэтому
   // для него закрытие по фону обрабатывается отдельно, в tictactoe.js,
   // через полноценную отмену поиска (TicTacToe.cancelOnlineSearch()).
-  if(modal.id === 'tttSearchModal') return;
+  // snakeOnlineModal — тот же случай, что и tttSearchModal: пока окно
+  // открыто, идёт создание/поиск онлайн-комнаты змейки в базе. Закрытие
+  // кликом по фону обрабатывается отдельно, в snake.js, через полноценный
+  // Snake.cancelOnlineSearch() — иначе запись игрока в комнате осталась
+  // бы висеть, и в списке комнат появлялся бы "призрак".
+  if(modal.id === 'tttSearchModal' || modal.id === 'snakeOnlineModal') return;
   modal.addEventListener('click', (e)=>{ if(e.target === modal) hide(modal); });
 });
 

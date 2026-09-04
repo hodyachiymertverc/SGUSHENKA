@@ -73,7 +73,9 @@ const DEFAULTS = {
     { id: 'sach3', emoji: '🏆', title: 'Сотня банок',     desc: 'Поймай суммарно 100 банок',             type: 'caught',   target: 100 },
     { id: 'sach4', emoji: '🎮', title: 'Разминка',        desc: 'Сыграй 5 игр в змейку',                 type: 'games',    target: 5 },
     { id: 'sach5', emoji: '🥇', title: 'Крепкий рекорд',  desc: 'Набери 20 очков на лёгком уровне',      type: 'bestEasy', target: 20 },
-    { id: 'sach6', emoji: '💣', title: 'Сапёр',           desc: 'Набери 15 очков на сложном уровне',     type: 'bestHard', target: 15 }
+    { id: 'sach6', emoji: '💣', title: 'Сапёр',           desc: 'Набери 15 очков на сложном уровне',     type: 'bestHard', target: 15 },
+    { id: 'sach7', emoji: '⚡', title: 'Твёрдая середина', desc: 'Набери 25 очков на среднем уровне',     type: 'bestMedium', target: 25 },
+    { id: 'sach8', emoji: '🌐', title: 'Онлайн-охотник',  desc: 'Набери 30 очков в онлайн-игре',         type: 'bestOnline', target: 30 }
   ],
 
   /* ---- уровни в Doodle-прыжках (по суммарной высоте за все игры) ---- */

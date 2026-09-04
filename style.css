@@ -455,13 +455,91 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 }
 
 /* =========================================================
-   ЗМЕЙКА
+   ЗМЕЙКА (.io-стиль: своя змейка, ботов, онлайн)
 ========================================================= */
-.snake-wrap{ margin-bottom: 12px; }
-#snakeHud{ flex-wrap: wrap; row-gap:6px; }
+.game-pick-grid-3{ grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 480px){ .game-pick-grid-3{ grid-template-columns: 1fr; } }
+.join-row{ display:flex; gap:8px; }
+.join-row .text-input{ flex:1; margin-bottom:0; }
 
-/* вкладки рекордов (лёгкий/сложный) */
-.records-tabs{ display:flex; gap:8px; margin: 10px 0 4px; }
+.snake-wrap{
+  margin-bottom: 12px;
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 4px solid var(--white);
+  box-shadow: 0 10px 0 var(--shadow), 0 16px 30px rgba(0,0,0,0.18);
+}
+#snakeCanvas{
+  display:block; width:100%; height: 100%;
+  background: #12141f;
+  border-radius: 0; border: none; box-shadow:none;
+  touch-action: none; cursor: crosshair;
+}
+
+/* круглые кнопки поверх канваса (выход/пауза) */
+.snake-io-btn{
+  position:absolute; top:12px; z-index:5;
+  width:42px; height:42px; border-radius:50%;
+  border:none; background: rgba(255,255,255,0.92);
+  font-size:1.1rem; cursor:pointer; box-shadow: 0 4px 0 rgba(0,0,0,0.25);
+  display:flex; align-items:center; justify-content:center;
+}
+.snake-io-btn:active{ transform: translateY(2px); }
+.snake-io-back{ left:12px; }
+.snake-io-pause{ right:12px; }
+
+/* очки по центру сверху */
+.snake-io-center{
+  position:absolute; top:10px; left:50%; transform: translateX(-50%);
+  z-index:5; text-align:center; pointer-events:none;
+}
+.snake-io-diff{
+  font-family:'Baloo 2',sans-serif; font-weight:700; font-size:0.85rem;
+  color:#fff; text-shadow: 0 2px 3px rgba(0,0,0,0.6); opacity:0.9;
+}
+.snake-io-score{
+  font-family:'Baloo 2',sans-serif; font-weight:800; font-size:1.8rem;
+  color:#fff; text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+  line-height:1.1;
+}
+
+/* таблица лидеров сверху справа */
+.snake-io-leaderboard{
+  position:absolute; top:60px; right:10px; z-index:5;
+  background: rgba(18,20,31,0.72); border-radius:14px;
+  padding:10px 12px; min-width:150px; max-width: 46vw;
+  color:#fff; font-size:0.78rem;
+  backdrop-filter: blur(2px);
+}
+.snake-io-lb-title{ font-family:'Baloo 2',sans-serif; font-weight:800; margin-bottom:4px; font-size:0.82rem; }
+.snake-io-lb-list{ list-style:none; margin:0; padding:0; }
+.snake-io-lb-list li{
+  display:flex; gap:6px; padding:1.5px 0; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+}
+.snake-io-lb-list li .lb-rank{ opacity:0.65; width:14px; flex-shrink:0; }
+.snake-io-lb-list li .lb-name{ flex:1; overflow:hidden; text-overflow:ellipsis; font-weight:700; }
+.snake-io-lb-list li .lb-score{ opacity:0.85; }
+.snake-io-lb-list li.is-me{ color: var(--gold); }
+.snake-io-lb-me{ margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.25); font-weight:700; color: var(--gold); white-space:nowrap; }
+
+/* кнопка ускорения — только на телефоне (сенсорные устройства) */
+.snake-io-boost{
+  position:absolute; left:16px; bottom:16px; z-index:5;
+  width:76px; height:76px; border-radius:50%;
+  border:none; background: radial-gradient(circle at 35% 30%, #FFE9A8, var(--gold));
+  box-shadow: 0 6px 0 #C68F00; font-size:1.9rem; cursor:pointer;
+  display:none; align-items:center; justify-content:center;
+  -webkit-user-select:none; user-select:none; touch-action:none;
+}
+.snake-io-boost:active, .snake-io-boost.pressed{ transform: translateY(4px); box-shadow: 0 2px 0 #C68F00; }
+@media (pointer: coarse){
+  .snake-io-boost{ display:flex; }
+}
+
+/* вкладки рекордов (лёгкий/средний/сложный/онлайн) */
+.records-tabs{ display:flex; gap:6px; margin: 10px 0 4px; flex-wrap:wrap; }
 .records-tab{
   flex:1; border:2px solid #EADFC8; background: var(--white);
   color: var(--caramel-dark); font-family:'Baloo 2',sans-serif; font-weight:800;

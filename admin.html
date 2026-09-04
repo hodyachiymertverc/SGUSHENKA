@@ -192,15 +192,29 @@
       </div>
 
       <div class="admin-card">
+        <h2>🏆 Рекорды — средний уровень</h2>
+        <p class="modal-note">Отдельная таблица рекордов для среднего режима змейки (против ботов).</p>
+        <button class="btn btn-danger btn-small" id="clearSnakeMediumBtn">Очистить рекорды (средний)</button>
+        <div id="adminSnakeRecordsMedium"></div>
+      </div>
+
+      <div class="admin-card">
         <h2>🏆 Рекорды — сложный уровень</h2>
-        <p class="modal-note">Отдельная таблица рекордов для сложного режима змейки (с бомбами).</p>
+        <p class="modal-note">Отдельная таблица рекордов для сложного режима змейки (много агрессивных ботов).</p>
         <button class="btn btn-danger btn-small" id="clearSnakeHardBtn">Очистить рекорды (сложный)</button>
         <div id="adminSnakeRecordsHard"></div>
       </div>
 
+      <div class="admin-card">
+        <h2>🌐 Рекорды — онлайн</h2>
+        <p class="modal-note">Таблица рекордов для игр против других игроков онлайн.</p>
+        <button class="btn btn-danger btn-small" id="clearSnakeOnlineBtn">Очистить рекорды (онлайн)</button>
+        <div id="adminSnakeRecordsOnline"></div>
+      </div>
+
       <details class="admin-card">
         <summary><h2 style="display:inline;">📈 Уровни змейки</h2></summary>
-        <p class="modal-note">Диапазоны считаются от суммарно пойманных банок за все игры (обе сложности вместе).</p>
+        <p class="modal-note">Диапазоны считаются от суммарно пойманных банок за все игры (все режимы вместе).</p>
         <div id="snakeLevelsAddForm"></div>
         <button class="btn btn-primary btn-small" id="snakeLevelsAddBtn" style="margin-top:8px;">+ Добавить уровень</button>
         <div id="snakeLevelsList" style="margin-top:12px;"></div>
