@@ -308,7 +308,7 @@
         <button class="game-pick" id="tttVsOnlineBtn">
           <span class="game-pick-emoji">🌐</span>
           <span class="game-pick-name">Онлайн</span>
-          <span class="game-pick-desc">Со случайным игроком</span>
+          <span class="game-pick-desc">Выбери соперника из списка</span>
         </button>
       </div>
 
@@ -513,10 +513,10 @@
 
 <!-- МОДАЛКА: ПОИСК СОПЕРНИКА (КРЕСТИКИ-НОЛИКИ) -->
 <div class="modal hidden" id="tttSearchModal">
-  <div class="modal-card" style="text-align:center;">
-    <h2>🔎 Ищем соперника…</h2>
-    <p class="modal-note">Подожди немного — как только найдётся другой игрок, партия начнётся автоматически.</p>
-    <div class="ttt-spinner"></div>
+  <div class="modal-card">
+    <h2>🌐 Игроки в сети</h2>
+    <p class="modal-note">Выбери соперника из списка ниже — партия начнётся сразу. Пока ты здесь, тебя тоже видят другие и могут пригласить первыми.</p>
+    <div id="tttLobbyList"></div>
     <button class="btn btn-secondary" id="tttCancelSearchBtn" style="width:100%;margin-top:16px;">Отменить</button>
   </div>
 </div>

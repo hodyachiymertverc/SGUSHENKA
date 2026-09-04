@@ -37,7 +37,14 @@ function escapeHtmlT(str){
 function tttShow(el){ if(el) el.classList.remove('hidden'); }
 function tttHide(el){ if(el) el.classList.add('hidden'); }
 
+// Основной путь — латиница в нижнем регистре. GitHub Pages (как и
+// большинство хостингов) раздаёт файлы с учётом регистра, поэтому если
+// в репозитории почему-то лежат X.png/O.png (с большой буквы) — на
+// локальном сервере (Windows/Mac, регистр не важен) картинки всё равно
+// загрузятся, а на GitHub — нет. Чтобы не зависеть от точного регистра
+// файлов в img/, ниже добавлена подстраховка через onerror.
 const TTT_MARK_SRC = { X: 'img/x.png', O: 'img/o.png' };
+const TTT_MARK_SRC_ALT = { X: 'img/X.png', O: 'img/O.png' };
 const TTT_MOVE_SECONDS = 30;
 
 const TTT_WIN_LINES = [
@@ -357,7 +364,7 @@ const TicTacToe = {
       const btn = document.createElement('button');
       btn.className = 'ttt-cell';
       btn.dataset.i = i;
-      btn.innerHTML = '<img class="ttt-mark" alt="">';
+      btn.innerHTML = '<img class="ttt-mark" alt=""><span class="ttt-mark-fallback"></span>';
       btn.addEventListener('click', ()=> this.handleCellClick(i));
       boardEl.appendChild(btn);
     }
@@ -369,15 +376,31 @@ const TicTacToe = {
     cells.forEach((cell, i)=>{
       const val = this.board[i];
       const img = cell.querySelector('.ttt-mark');
+      const fallback = cell.querySelector('.ttt-mark-fallback');
       if(!img) return;
       if(val === 'X' || val === 'O'){
-        img.src = TTT_MARK_SRC[val];
         img.alt = val === 'X' ? 'Крестик' : 'Нолик';
+        // если основной путь не загрузился — пробуем альтернативный
+        // регистр имени файла, а если и это не помогло — рисуем эмодзи,
+        // чтобы клетка никогда не осталась пустой из-за хостинга
+        img.onerror = ()=>{
+          img.onerror = ()=>{
+            img.onerror = null;
+            img.classList.remove('shown');
+            img.removeAttribute('src');
+            if(fallback){ fallback.textContent = val === 'X' ? '❌' : '⭕'; fallback.classList.add('shown'); }
+          };
+          img.src = TTT_MARK_SRC_ALT[val];
+        };
+        img.src = TTT_MARK_SRC[val];
         img.classList.add('shown');
+        if(fallback) fallback.classList.remove('shown');
       } else {
+        img.onerror = null;
         img.classList.remove('shown');
         img.removeAttribute('src');
         img.alt = '';
+        if(fallback) fallback.classList.remove('shown');
       }
       cell.disabled = !!val || this.gameOver;
       cell.classList.toggle('win-cell', !!winLine && winLine.includes(i));
@@ -403,7 +426,11 @@ const TicTacToe = {
   renderModePill(){
     const pill = document.getElementById('tttModePill');
     if(!pill) return;
-    pill.textContent = this.mode === 'bot' ? (TTT_DIFF_LABEL[this.botDifficulty] || '🤖 Бот') : '🌐 Онлайн';
+    if(this.mode === 'bot'){
+      pill.textContent = TTT_DIFF_LABEL[this.botDifficulty] || '🤖 Бот';
+    } else {
+      pill.textContent = '🌐 Играешь с: ' + (this.opponentName || 'соперник');
+    }
   },
   showGameOver(outcome, res){
     const titleEl = document.getElementById('tttGameOverTitle');
@@ -548,56 +575,94 @@ const TicTacToe = {
 
   /* =========================================================
      РЕЖИМ: ОНЛАЙН С ДРУГИМ ИГРОКОМ
+
+     Вместо слепого автоподбора игрок видит список тех, кто
+     сейчас тоже открыл раздел "Онлайн", и сам решает, к кому
+     подключиться. Как только кто-то нажимает "Играть" рядом
+     с чужим именем — создаётся партия, и она сразу же находится
+     вторым игроком через handleGamesUpdate (он всё это время
+     тоже слушает список активных партий, пока сидит в списке
+     ожидания).
   ========================================================= */
   startOnlineSearch(){
     if(!window.DB) return;
     this.mode = 'online';
     this.onlineGameId = null;
+    this._lastLobbyList = [];
     tttShow(document.getElementById('tttSearchModal'));
+    this.renderLobbyList([]);
 
     this.myLobbyId = DB.addItem('tttLobby', { playerId: this.playerId, name: getNickname(), ts: Date.now() });
-    this._unsubLobby = DB.watchCollection('tttLobby', list=> this.handleLobbyUpdate(list));
+    this._unsubLobby = DB.watchCollection('tttLobby', list=>{
+      this._lastLobbyList = list;
+      this.renderLobbyList(list);
+    });
     this._unsubGames = DB.watchCollection('tttGames', list=> this.handleGamesUpdate(list));
+    // подтягиваем счётчик "ждёт N с" даже когда список никто не менял
+    this._lobbyTickInterval = setInterval(()=> this.renderLobbyList(this._lastLobbyList || []), 1000);
   },
   cancelOnlineSearch(){
     if(this._unsubLobby){ this._unsubLobby(); this._unsubLobby = null; }
     if(this._unsubGames){ this._unsubGames(); this._unsubGames = null; }
+    if(this._lobbyTickInterval){ clearInterval(this._lobbyTickInterval); this._lobbyTickInterval = null; }
     if(this.myLobbyId && window.DB) DB.deleteItem('tttLobby', this.myLobbyId);
     this.myLobbyId = null;
     tttHide(document.getElementById('tttSearchModal'));
   },
-  // подбор пары: сортируем очередь по времени, первые двое — пара.
-  // Партию создаёт тот, кто пришёл ВТОРЫМ (чтобы оба клиента не
-  // создавали игру одновременно); первый просто ждёт появления
-  // новой игры в handleGamesUpdate.
-  handleLobbyUpdate(list){
-    if(this.onlineGameId || !this.myLobbyId) return;
+  renderLobbyList(list){
+    const el = document.getElementById('tttLobbyList');
+    if(!el) return;
     const now = Date.now();
-    const waiting = list
-      .filter(e=> now - (e.ts || 0) < 120000)
+    const others = (list || [])
+      .filter(e=> e.id !== this.myLobbyId && now - (e.ts || 0) < 120000)
       .sort((a,b)=> (a.ts || 0) - (b.ts || 0));
-    if(waiting.length < 2) return;
-    const [older, newer] = waiting;
-    if(this.myLobbyId !== older.id && this.myLobbyId !== newer.id) return;
-    if(this.myLobbyId === newer.id){
-      const gameId = DB.addItem('tttGames', {
-        board: Array(9).fill(''),
-        turn: 'X',
-        status: 'playing',
-        winner: null,
-        players: {
-          X: { id: older.playerId, name: older.name },
-          O: { id: newer.playerId, name: newer.name }
-        },
-        createdTs: Date.now(),
-        moveTs: Date.now()
-      });
-      DB.deleteItem('tttLobby', older.id);
-      DB.deleteItem('tttLobby', newer.id);
-      this.joinOnlineGame(gameId);
+
+    if(!others.length){
+      el.innerHTML = `
+        <p class="news-empty">Пока никого нет в сети. Как только кто-то откроет этот раздел — вы увидите друг друга, и партию можно будет начать в один клик.</p>
+        <div class="ttt-spinner"></div>
+      `;
+      return;
     }
-    // если я "older" — просто жду, меня подхватит handleGamesUpdate
+
+    el.innerHTML = others.map(e=>{
+      const waitSec = Math.max(0, Math.floor((now - (e.ts || 0)) / 1000));
+      return `<div class="lobby-entry">
+        <span class="lobby-entry-name">${escapeHtmlT(e.name || 'Игрок')}</span>
+        <span class="lobby-entry-wait">ждёт ${waitSec} с</span>
+        <button class="btn btn-primary btn-small" data-lobby-entry="${escapeHtmlT(e.id)}">▶ Играть</button>
+      </div>`;
+    }).join('');
+
+    el.querySelectorAll('[data-lobby-entry]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const target = others.find(e=> e.id === btn.dataset.lobbyEntry);
+        if(target) this.connectToPlayer(target);
+      });
+    });
   },
+  // приглашаем конкретного игрока из списка: создаём партию на двоих
+  // и сразу входим в неё сами — второй игрок подключится автоматически
+  connectToPlayer(target){
+    if(this.onlineGameId || !this.myLobbyId || !window.DB) return;
+    const iAmX = Math.random() < 0.5; // случайно решаем, кто ходит первым
+    const gameId = DB.addItem('tttGames', {
+      board: Array(9).fill(''),
+      turn: 'X',
+      status: 'playing',
+      winner: null,
+      players: iAmX
+        ? { X: { id: this.playerId, name: getNickname() }, O: { id: target.playerId, name: target.name } }
+        : { X: { id: target.playerId, name: target.name }, O: { id: this.playerId, name: getNickname() } },
+      createdTs: Date.now(),
+      moveTs: Date.now()
+    });
+    DB.deleteItem('tttLobby', this.myLobbyId);
+    DB.deleteItem('tttLobby', target.id);
+    this.joinOnlineGame(gameId);
+  },
+  // пока сидим в списке ожидания, слушаем и партии — вдруг кто-то
+  // выбрал НАС из своего списка
   handleGamesUpdate(list){
     if(this.onlineGameId) return;
     const mine = list.find(g=> g.status === 'playing' && g.players && (
@@ -612,6 +677,7 @@ const TicTacToe = {
     this.myLobbyId = null;
     if(this._unsubLobby){ this._unsubLobby(); this._unsubLobby = null; }
     if(this._unsubGames){ this._unsubGames(); this._unsubGames = null; }
+    if(this._lobbyTickInterval){ clearInterval(this._lobbyTickInterval); this._lobbyTickInterval = null; }
     tttHide(document.getElementById('tttSearchModal'));
     tttHide(document.getElementById('tttGameOverOverlay'));
 
