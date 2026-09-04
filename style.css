@@ -140,7 +140,12 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 /* HUD игры */
 .hud{
   display:flex; align-items:center; justify-content:space-between;
-  gap:8px; margin: 10px 0;
+  gap:8px; row-gap:8px; margin: 10px 0;
+  /* раньше ряд не переносился на новую строку — на узких телефонах
+     несколько "пилюль" (режим/ход/таймер) плюс кнопка "Выход" не
+     помещались по ширине и вылезали за пределы экрана. Перенос строк
+     решает это без изменения самой вёрстки на широких экранах. */
+  flex-wrap: wrap;
 }
 .score-pill{
   font-family:'Baloo 2',sans-serif; font-weight:700;
@@ -276,10 +281,25 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
   .menu-card{ padding:24px 16px; }
   .modal-card{ padding: 22px 16px; }
   .reaction-btn{ font-size:0.9rem; padding:9px 6px; }
+  /* пилюли HUD и кнопка "Выход" чуть компактнее на узких телефонах,
+     чтобы реже переносились на новую строку и не выглядели слишком
+     разными по размеру рядом друг с другом */
+  .score-pill{ padding:8px 12px; font-size:0.92rem; }
+  .hud .btn-small{ padding:8px 12px; font-size:0.85rem; }
 }
 
 @media (max-width: 420px){
   .game-pick-grid{ grid-template-columns: 1fr; }
+}
+
+/* Ряд выбора сложности бота в крестиках-ноликах — всегда 3 колонки
+   (раньше это задавалось инлайн-стилем прямо в HTML, из-за чего строка
+   выше НЕ могла её переопределить на узких экранах, и три кнопки
+   сложности сжимались/вылезали за игровое поле). ID-селектор здесь
+   нужен, чтобы точно выигрывать у общего правила `.game-pick-grid`. */
+#tttBotDifficultyRow{ grid-template-columns: repeat(3, 1fr); margin-top:12px; }
+@media (max-width: 420px){
+  #tttBotDifficultyRow{ grid-template-columns: 1fr; }
 }
 
 @media (max-height: 640px){
@@ -506,6 +526,7 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 
 .lobby-entry{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
+  flex-wrap: wrap;
   background: var(--cream); border-radius:14px; padding:10px 14px; margin-top:8px;
 }
 .lobby-entry-name{ font-weight:800; font-family:'Baloo 2',sans-serif; flex:1; }

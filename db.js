@@ -428,6 +428,38 @@ const DB = {
       }
     }
   },
+  // Создаёт запись с точным id, только если её там ещё НЕТ — а если
+  // replaceIfStatus указан и текущая запись имеет именно такой status
+  // (например, 'finished'), то она считается "свободной" и перезаписывается
+  // новыми данными. Нужно для онлайн-партий крестиков-ноликов: если два
+  // игрока одновременно нажимают "Играть" друг на друге, оба пытаются
+  // создать партию с ОДНИМ И ТЕМ ЖЕ детерминированным id — благодаря этому
+  // методу выигрывает только одна попытка и не появляется двух разных
+  // комнат для одной и той же пары игроков. В облаке это делается
+  // атомарно через transaction(), чтобы гонка была исключена по-настоящему,
+  // а не только "как повезёт".
+  createIfAbsent(name, id, obj, replaceIfStatus){
+    if(this.cloud){
+      const ref = this.rtdb.ref(name + '/' + id);
+      ref.transaction(current=>{
+        if(current === null || current === undefined) return obj;
+        if(replaceIfStatus && current.status === replaceIfStatus) return obj;
+        return; // отменяем транзакцию — запись уже занята
+      }).catch(err=> console.warn('createIfAbsent error', err));
+    } else {
+      const list = this._localGet('gd_col_' + name, []);
+      const idx = list.findIndex(x=> String(x.id) === String(id));
+      if(idx === -1){
+        list.push({ id, ...obj });
+      } else if(replaceIfStatus && list[idx].status === replaceIfStatus){
+        list[idx] = { id, ...obj };
+      } else {
+        return;
+      }
+      this._localSet('gd_col_' + name, list);
+      this._notifyCollection(name);
+    }
+  },
   setItem(name, id, patch){
     if(this.cloud){
       this.rtdb.ref(name + '/' + id).update(patch).catch(err=> console.warn(err));

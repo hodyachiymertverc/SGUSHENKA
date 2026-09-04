@@ -613,9 +613,21 @@ const TicTacToe = {
     const el = document.getElementById('tttLobbyList');
     if(!el) return;
     const now = Date.now();
-    const others = (list || [])
-      .filter(e=> e.id !== this.myLobbyId && now - (e.ts || 0) < 120000)
-      .sort((a,b)=> (a.ts || 0) - (b.ts || 0));
+    const others = [];
+    (list || []).forEach(e=>{
+      if(e.id === this.myLobbyId) return;
+      if(now - (e.ts || 0) >= 120000){
+        // запись "протухла" (например, игрок закрыл вкладку/приложение,
+        // не дождавшись pagehide/beforeunload, или свернул браузер на
+        // телефоне) — раньше такие записи только скрывались в списке, но
+        // оставались в базе навсегда, из-за чего один и тот же игрок мог
+        // мелькать в списке снова и снова. Теперь чистим их по-настоящему.
+        if(window.DB) DB.deleteItem('tttLobby', e.id);
+        return;
+      }
+      others.push(e);
+    });
+    others.sort((a,b)=> (a.ts || 0) - (b.ts || 0));
 
     if(!others.length){
       el.innerHTML = `
@@ -646,7 +658,19 @@ const TicTacToe = {
   connectToPlayer(target){
     if(this.onlineGameId || !this.myLobbyId || !window.DB) return;
     const iAmX = Math.random() < 0.5; // случайно решаем, кто ходит первым
-    const gameId = DB.addItem('tttGames', {
+
+    // id партии — ДЕТЕРМИНИРОВАННЫЙ (собран из id обоих игроков в
+    // одинаковом порядке), а не случайный. Это специально: если оба
+    // игрока почти одновременно нажмут "Играть" друг напротив друга
+    // (пока список ещё не успел обновиться на обеих сторонах), они оба
+    // попытаются создать партию — и без этого получились бы ДВЕ разные
+    // комнаты для одной и той же пары ("та же партия и новая комната от
+    // того же игрока"). С одинаковым id обе попытки метят в одну и ту же
+    // запись, а DB.createIfAbsent гарантирует, что реально создастся
+    // только одна из них (в облаке — атомарно), и оба игрока попадут в
+    // ОДНУ общую партию.
+    const gameId = 'ttt_' + [this.playerId, target.playerId].sort().join('__');
+    DB.createIfAbsent('tttGames', gameId, {
       board: Array(9).fill(''),
       turn: 'X',
       status: 'playing',
@@ -656,7 +680,8 @@ const TicTacToe = {
         : { X: { id: target.playerId, name: target.name }, O: { id: this.playerId, name: getNickname() } },
       createdTs: Date.now(),
       moveTs: Date.now()
-    });
+    }, 'finished'); // 'finished' — если по этому id уже лежит СТАРАЯ завершённая партия с этим же соперником, считаем место свободным и начинаем новую поверх неё
+
     DB.deleteItem('tttLobby', this.myLobbyId);
     DB.deleteItem('tttLobby', target.id);
     this.joinOnlineGame(gameId);
@@ -721,10 +746,29 @@ const TicTacToe = {
       const outcome = doc.winner === 'draw' ? 'draw' : (doc.winner === this.mySymbol ? 'win' : 'loss');
       this.recordResult(outcome, 'online');
       this.showGameOver(outcome, res);
-      // партия больше не нужна — удаляем через небольшую паузу,
-      // чтобы второй клиент точно успел получить финальное состояние
-      setTimeout(()=>{ if(window.DB && this.onlineGameId === gameId) DB.deleteItem('tttGames', gameId); }, 4000);
+      // партия больше не нужна — удаляем через небольшую паузу, чтобы
+      // второй клиент точно успел получить финальное состояние. ВАЖНО:
+      // раньше удаление проверялось через `this.onlineGameId === gameId`,
+      // но если игрок успевал нажать "В меню" раньше, чем сработает этот
+      // таймер, onlineGameId уже обнулялся — и завершённая партия навсегда
+      // "зависала" в базе (это и была причина, по которой в списке
+      // онлайн-игроков можно было снова увидеть уже сыгранный матч).
+      // Вместо этого просто перепроверяем актуальный статус партии перед
+      // удалением — так безопаснее (не удалим случайно уже НОВУЮ партию,
+      // если тот же соперник успел переиспользовать этот id для реванша).
+      this.scheduleFinishedGameCleanup(gameId);
     }
+  },
+  // удаляет завершённую ('finished') онлайн-партию из базы через паузу,
+  // предварительно перепроверяя, что она всё ещё в статусе 'finished'
+  // (а не была тем временем переиспользована под новую игру с тем же id)
+  scheduleFinishedGameCleanup(gameId){
+    setTimeout(()=>{
+      if(!window.DB) return;
+      DB.getItemOnce('tttGames', gameId).then(cur=>{
+        if(cur && cur.status === 'finished') DB.deleteItem('tttGames', gameId);
+      });
+    }, 4000);
   },
   handleCellClickOnline(i){
     if(!this.onlineGameId || this.gameOver) return;
@@ -763,7 +807,8 @@ const TicTacToe = {
     if(this.onlineGameId && window.DB && !this.gameOver){
       if(forfeit){
         const winnerSym = this.mySymbol === 'X' ? 'O' : 'X';
-        DB.setItem('tttGames', this.onlineGameId, {
+        const finishedId = this.onlineGameId;
+        DB.setItem('tttGames', finishedId, {
           status: 'finished',
           winner: winnerSym,
           winLine: null,
@@ -771,8 +816,7 @@ const TicTacToe = {
           moveTs: Date.now()
         });
         // не удаляем сразу — даём сопернику время получить финальное состояние
-        const finishedId = this.onlineGameId;
-        setTimeout(()=>{ if(window.DB) DB.deleteItem('tttGames', finishedId); }, 4000);
+        this.scheduleFinishedGameCleanup(finishedId);
       } else {
         DB.deleteItem('tttGames', this.onlineGameId);
       }
@@ -783,7 +827,18 @@ const TicTacToe = {
   // best-effort попытка засчитать поражение, если вкладку закрыли
   // прямо посреди онлайн-партии
   forfeitOnUnload(){
-    if(this.mode === 'online' && this.onlineGameId && !this.gameOver && window.DB){
+    if(!window.DB) return;
+    // если мы всё ещё в статусе "ищу соперника" (список открыт, но матч
+    // ещё не начался) и в этот момент закрываем вкладку — обязательно
+    // убираем свою запись из списка ожидающих. Раньше это не делалось,
+    // и "призрачная" запись висела в базе до 2 минут (а то и дольше на
+    // мобильных, где вкладка может просто уйти в фон без событий) —
+    // именно это чаще всего и выглядело как "тот же игрок снова и снова
+    // появляется в списке".
+    if(this.myLobbyId){
+      try{ DB.deleteItem('tttLobby', this.myLobbyId); }catch(err){ /* страница уже закрывается */ }
+    }
+    if(this.mode === 'online' && this.onlineGameId && !this.gameOver){
       try{
         const winnerSym = this.mySymbol === 'X' ? 'O' : 'X';
         DB.setItem('tttGames', this.onlineGameId, {
@@ -859,6 +914,18 @@ const TicTacToe = {
     if(vsOnlineBtn) vsOnlineBtn.addEventListener('click', ()=> this.startOnlineSearch());
     const cancelSearchBtn = document.getElementById('tttCancelSearchBtn');
     if(cancelSearchBtn) cancelSearchBtn.addEventListener('click', ()=> this.cancelOnlineSearch());
+    // модалка поиска соперника закрывается тапом по фону мимо карточки
+    // (см. общий обработчик .modal в script.js) — но она специально
+    // исключена там из общего поведения (иначе "закрытие" просто прятало
+    // бы окно, а поиск в базе продолжал бы висеть активным и оставлял бы
+    // "призрачную" запись в списке ожидающих игроков). Здесь обрабатываем
+    // именно этот клик правильно — через полноценную отмену поиска.
+    const searchModal = document.getElementById('tttSearchModal');
+    if(searchModal){
+      searchModal.addEventListener('click', (e)=>{
+        if(e.target === searchModal) this.cancelOnlineSearch();
+      });
+    }
 
     const exitBtn = document.getElementById('tttExitBtn');
     if(exitBtn) exitBtn.addEventListener('click', ()=> this.goToMenu());

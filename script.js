@@ -88,6 +88,13 @@ document.querySelectorAll('[data-close]').forEach(btn=>{
   btn.addEventListener('click', ()=> hide(document.getElementById(btn.dataset.close)));
 });
 document.querySelectorAll('.modal').forEach(modal=>{
+  // tttSearchModal — особый случай: пока это окно открыто, в фоне идёт
+  // реальный поиск соперника (запись в базе + подписки). Если просто
+  // спрятать окно кликом по фону, поиск продолжит висеть активным и
+  // оставит "призрачную" запись в списке ожидающих игроков — поэтому
+  // для него закрытие по фону обрабатывается отдельно, в tictactoe.js,
+  // через полноценную отмену поиска (TicTacToe.cancelOnlineSearch()).
+  if(modal.id === 'tttSearchModal') return;
   modal.addEventListener('click', (e)=>{ if(e.target === modal) hide(modal); });
 });
 
