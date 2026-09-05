@@ -435,6 +435,10 @@ const TicTacToe = {
   showGameOver(outcome, res){
     const titleEl = document.getElementById('tttGameOverTitle');
     const textEl = document.getElementById('tttGameOverText');
+    const restartBtn = document.getElementById('tttRestartBtn');
+    if(restartBtn) restartBtn.disabled = false;
+    const rematchStatusEl = document.getElementById('tttRematchStatus');
+    if(rematchStatusEl) tttHide(rematchStatusEl);
     const timeout = !!(res && res.timeout);
     const forfeit = !!(res && res.forfeit);
     if(outcome === 'win'){
@@ -679,7 +683,9 @@ const TicTacToe = {
         ? { X: { id: this.playerId, name: getNickname() }, O: { id: target.playerId, name: target.name } }
         : { X: { id: target.playerId, name: target.name }, O: { id: this.playerId, name: getNickname() } },
       createdTs: Date.now(),
-      moveTs: Date.now()
+      moveTs: Date.now(),
+      round: 1,
+      rematch: {}
     }, 'finished'); // 'finished' — если по этому id уже лежит СТАРАЯ завершённая партия с этим же соперником, считаем место свободным и начинаем новую поверх неё
 
     DB.deleteItem('tttLobby', this.myLobbyId);
@@ -727,6 +733,8 @@ const TicTacToe = {
     if(this._lobbyTickInterval){ clearInterval(this._lobbyTickInterval); this._lobbyTickInterval = null; }
     tttHide(document.getElementById('tttSearchModal'));
     tttHide(document.getElementById('tttGameOverOverlay'));
+    const rematchStatusEl = document.getElementById('tttRematchStatus');
+    if(rematchStatusEl) tttHide(rematchStatusEl);
 
     this._unsubActiveGame = DB.watchItem('tttGames', gameId, doc=> this.renderOnlineGame(doc, gameId));
     this.startMoveTimer();
@@ -762,35 +770,118 @@ const TicTacToe = {
     this.renderBoard(res && res.line);
     this.renderTurnPill();
 
-    if(doc.status === 'finished' && !this._processedGameIds.has(gameId)){
-      this._processedGameIds.add(gameId);
-      this.stopMoveTimer();
-      const outcome = doc.winner === 'draw' ? 'draw' : (doc.winner === this.mySymbol ? 'win' : 'loss');
-      this.recordResult(outcome, 'online');
-      this.showGameOver(outcome, res);
-      // партия больше не нужна — удаляем через небольшую паузу, чтобы
-      // второй клиент точно успел получить финальное состояние. ВАЖНО:
-      // раньше удаление проверялось через `this.onlineGameId === gameId`,
-      // но если игрок успевал нажать "В меню" раньше, чем сработает этот
-      // таймер, onlineGameId уже обнулялся — и завершённая партия навсегда
-      // "зависала" в базе (это и была причина, по которой в списке
-      // онлайн-игроков можно было снова увидеть уже сыгранный матч).
-      // Вместо этого просто перепроверяем актуальный статус партии перед
-      // удалением — так безопаснее (не удалим случайно уже НОВУЮ партию,
-      // если тот же соперник успел переиспользовать этот id для реванша).
-      this.scheduleFinishedGameCleanup(gameId);
+    // партия и её id (gameId) переиспользуются между раундами — при
+    // реванше НЕ создаётся новая "комната", просто поле сбрасывается
+    // прямо в этой же записи и round увеличивается на 1. Поэтому ключ
+    // для "уже обработали конец ЭТОГО раунда" должен включать round —
+    // иначе после реванша конец второго раунда просто проигнорировался
+    // бы (id партии тот же самый, что и у первого раунда).
+    const round = doc.round || 1;
+    const roundKey = gameId + ':' + round;
+    if(doc.status === 'finished'){
+      if(!this._processedGameIds.has(roundKey)){
+        this._processedGameIds.add(roundKey);
+        this.stopMoveTimer();
+        const outcome = doc.winner === 'draw' ? 'draw' : (doc.winner === this.mySymbol ? 'win' : 'loss');
+        this.recordResult(outcome, 'online');
+        this.showGameOver(outcome, res);
+        // партия удаляется через паузу, если реванш так и не случится —
+        // это даёт обоим игрокам время нажать "Играть снова" друг для
+        // друга, прежде чем комната будет считаться брошенной и очищена.
+        // ВАЖНО: раньше удаление проверялось через
+        // `this.onlineGameId === gameId`, но если игрок успевал нажать
+        // "В меню" раньше, чем сработает этот таймер, onlineGameId уже
+        // обнулялся — и завершённая партия навсегда "зависала" в базе
+        // (это и была причина, по которой в списке онлайн-игроков можно
+        // было снова увидеть уже сыгранный матч). Вместо этого просто
+        // перепроверяем актуальный статус партии перед удалением — так
+        // безопаснее (не удалим случайно уже НОВЫЙ раунд, если статус
+        // успел перейти обратно в 'playing' благодаря реваншу).
+        this.scheduleFinishedGameCleanup(gameId);
+      }
+      this.updateRematchStatusUI(doc);
+      this.maybeStartRematchRound(doc, gameId);
+    } else {
+      // партия снова идёт (в т.ч. свежий раунд-реванш) — прячем оверлей
+      // конца игры и статус реванша, возобновляем таймер хода, если он
+      // был остановлен предыдущим завершением партии
+      tttHide(document.getElementById('tttGameOverOverlay'));
+      const rs = document.getElementById('tttRematchStatus');
+      if(rs) tttHide(rs);
+      if(!this._moveTimerInterval) this.startMoveTimer();
     }
+  },
+  // id соперника в ТЕКУЩЕЙ партии (по последнему известному состоянию players)
+  currentOpponentId(doc){
+    if(!doc || !doc.players) return null;
+    const amX = doc.players.X && doc.players.X.id === this.playerId;
+    const opp = amX ? doc.players.O : doc.players.X;
+    return opp ? opp.id : null;
+  },
+  // показывает во всплывающем окне конца игры, кто уже нажал "Играть
+  // снова" — сам игрок, соперник, или оба (тогда сразу начнётся новый раунд)
+  updateRematchStatusUI(doc){
+    const statusEl = document.getElementById('tttRematchStatus');
+    if(!statusEl) return;
+    const rematch = doc.rematch || {};
+    const otherId = this.currentOpponentId(doc);
+    const iWant = !!rematch[this.playerId];
+    const theyWant = !!(otherId && rematch[otherId]);
+    if(theyWant && !iWant){
+      statusEl.textContent = '🔁 Соперник хочет сыграть ещё раз! Нажми «Играть снова», чтобы продолжить.';
+      tttShow(statusEl);
+    } else if(iWant && !theyWant){
+      statusEl.textContent = '⏳ Ждём, когда соперник тоже нажмёт «Играть снова»…';
+      tttShow(statusEl);
+    } else {
+      tttHide(statusEl);
+    }
+  },
+  // как только ОБА игрока пометили в базе, что хотят реванш — сбрасываем
+  // поле и начинаем новый раунд В ТОЙ ЖЕ комнате (gameId не меняется,
+  // поэтому никакой "второй комнаты" не появляется). Игроки меняются
+  // местами X/O, чтобы первый ход не доставался одному и тому же человеку
+  // каждый раз.
+  maybeStartRematchRound(doc, gameId){
+    if(!window.DB) return;
+    const otherId = this.currentOpponentId(doc);
+    if(!otherId) return;
+    const rematch = doc.rematch || {};
+    if(!(rematch[this.playerId] && rematch[otherId])) return;
+    const round = doc.round || 1;
+    const resetKey = 'reset_' + gameId + ':' + round;
+    if(this._processedGameIds.has(resetKey)) return; // уже отправляли сброс для этого состояния
+    this._processedGameIds.add(resetKey);
+    DB.setItem('tttGames', gameId, {
+      board: Array(9).fill(''),
+      turn: 'X',
+      status: 'playing',
+      winner: null,
+      winLine: null,
+      timeoutReason: null,
+      forfeitReason: null,
+      players: { X: doc.players.O, O: doc.players.X },
+      rematch: {},
+      round: round + 1,
+      moveTs: Date.now()
+    });
   },
   // удаляет завершённую ('finished') онлайн-партию из базы через паузу,
   // предварительно перепроверяя, что она всё ещё в статусе 'finished'
   // (а не была тем временем переиспользована под новую игру с тем же id)
   scheduleFinishedGameCleanup(gameId){
+    // раньше пауза перед удалением была всего 4 секунды — этого хватало
+    // только чтобы второй клиент успел получить финальное состояние, но
+    // не хватало, чтобы оба игрока успели нажать "Играть снова" друг для
+    // друга (см. requestRematch/maybeStartRematchRound). Теперь ждём
+    // дольше, а перепроверка статуса перед удалением (см. ниже) и так
+    // защищает от удаления комнаты, если реванш уже начался.
     setTimeout(()=>{
       if(!window.DB) return;
       DB.getItemOnce('tttGames', gameId).then(cur=>{
         if(cur && cur.status === 'finished') DB.deleteItem('tttGames', gameId);
       });
-    }, 4000);
+    }, 20000);
   },
   handleCellClickOnline(i){
     if(!this.onlineGameId || this.gameOver) return;
@@ -893,16 +984,51 @@ const TicTacToe = {
     tttShow(document.getElementById('tttMenuScreen'));
   },
   restartCurrent(){
-    tttHide(document.getElementById('tttGameOverOverlay'));
     if(this.mode === 'bot'){
+      tttHide(document.getElementById('tttGameOverOverlay'));
       this.startBotGame(this.botDifficulty);
     } else {
-      // игра уже завершена к этому моменту — форфейта не будет
-      this.exitOnlineGame(false);
-      tttHide(document.getElementById('tttGameScreen'));
-      tttShow(document.getElementById('tttMenuScreen'));
-      this.startOnlineSearch();
+      this.requestRematch();
     }
+  },
+  // игрок нажал "Играть снова" в ЗАВЕРШЁННОЙ онлайн-партии: раньше это
+  // сразу удаляло комнату и кидало игрока в общий поиск нового
+  // соперника — из-за чего оба игрока пары почти никогда не попадали
+  // обратно друг к другу, а старая партия иногда успевала остаться в
+  // базе, если её не удаляли (а также приходилось судьбой попадать на
+  // случайного нового соперника, а не на того же самого). Теперь вместо
+  // этого ставится флаг "хочу реванш" в ТОЙ ЖЕ партии — как только оба
+  // игрока пары его поставят, начнётся новый раунд в той же комнате
+  // (см. maybeStartRematchRound). Оверлей конца игры при этом НЕ
+  // прячется — в нём остаётся статус ожидания/приглашения к реваншу.
+  requestRematch(){
+    const restartBtn = document.getElementById('tttRestartBtn');
+    if(restartBtn) restartBtn.disabled = true;
+    if(!this.onlineGameId || !window.DB){
+      this.leaveOnlineToGeneralSearch();
+      return;
+    }
+    const gameId = this.onlineGameId;
+    DB.getItemOnce('tttGames', gameId).then(cur=>{
+      if(!cur || cur.status !== 'finished'){
+        // комнаты уже нет, либо соперник успел выйти — соперника для
+        // реванша найти нельзя, ищем нового через общий список
+        this.leaveOnlineToGeneralSearch();
+        return;
+      }
+      DB.setNestedValue('tttGames', gameId, 'rematch/' + this.playerId, true);
+      if(restartBtn) restartBtn.disabled = false;
+      this.updateRematchStatusUI(Object.assign({}, cur, {
+        rematch: Object.assign({}, cur.rematch, { [this.playerId]: true })
+      }));
+    }).catch(()=>{ if(restartBtn) restartBtn.disabled = false; });
+  },
+  leaveOnlineToGeneralSearch(){
+    tttHide(document.getElementById('tttGameOverOverlay'));
+    this.exitOnlineGame(false);
+    tttHide(document.getElementById('tttGameScreen'));
+    tttShow(document.getElementById('tttMenuScreen'));
+    this.startOnlineSearch();
   },
 
   bindUI(){

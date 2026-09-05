@@ -229,19 +229,23 @@ const SnakeClassic = {
     const canvas = document.getElementById('snakeClassicCanvas');
     const wrap = document.getElementById('snakeClassicGameWrap');
     if(!screen || !canvas || !wrap || screen.classList.contains('hidden')) return;
-    const topbar = document.querySelector('.topbar');
-    const hud = document.getElementById('snakeClassicHud');
     const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    const used = (topbar ? topbar.offsetHeight : 0) + (hud ? hud.offsetHeight : 0) + 40;
-    // раньше здесь был фиксированный нижний порог (260px), который на
-    // невысоких экранах (например, телефон в альбомной ориентации,
-    // где HUD из-за длинного текста сложности переносится на 2 строки)
-    // мог оказаться БОЛЬШЕ реально доступного места — из-за этого поле
-    // становилось выше видимой области экрана и как будто "вылезало"
-    // за рамку. Теперь высота никогда не превышает доступное вертикальное
-    // пространство: нижний порог применяется только пока он не превышает
-    // vh - used.
-    const available = Math.max(0, vh - used);
+    // раньше "used" (место над полем) считался как грубая сумма
+    // topbar.offsetHeight + hud.offsetHeight + 40 — этот запас не
+    // учитывал ни нижний отступ <main> (padding-bottom), ни safe-area
+    // снизу на телефонах с "чёлкой"/полосой жестов. Из-за этого высота
+    // поля иногда оказывалась чуть БОЛЬШЕ реально видимого места, и
+    // нижний край поля (со стенкой) уходил под нижний край экрана —
+    // сама стенка внизу переставала быть видна.
+    // Теперь берём РЕАЛЬНУЮ позицию wrap на экране (сколько места уже
+    // занято сверху — topbar+hud) и реальный нижний отступ <main>,
+    // включая env(safe-area-inset-bottom), — так расчёт не может
+    // разойтись с тем, что браузер отрисует на самом деле.
+    const wrapTop = wrap.getBoundingClientRect().top;
+    const mainEl = document.querySelector('main');
+    const mainPadBottom = mainEl ? (parseFloat(getComputedStyle(mainEl).paddingBottom) || 0) : 0;
+    const bottomSafety = 8; // небольшой дополнительный запас на всякий случай
+    const available = Math.max(0, vh - wrapTop - mainPadBottom - bottomSafety);
     const minHeight = Math.min(220, available || 220);
     const height = Math.max(minHeight, available);
     wrap.style.height = height + 'px';

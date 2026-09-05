@@ -510,6 +510,33 @@ const DB = {
       this._notifyCollection(name);
     }
   },
+  // как incrementNested, но просто ЗАПИСЫВАЕТ значение во вложенное поле,
+  // не трогая соседние ключи на этом же уровне. Нужно, например, чтобы
+  // каждый из двух игроков онлайн-партии мог поставить СВОЙ флаг "хочу
+  // сыграть ещё раз" (rematch/<id-игрока>) — если бы вместо этого оба
+  // писали целиком весь объект rematch через setItem (обычный update()
+  // с полной подменой значения ключа), при почти одновременном нажатии
+  // "Играть снова" один игрок мог бы стереть флаг другого гонкой записей.
+  setNestedValue(name, id, path, value){
+    if(this.cloud){
+      const updates = {};
+      updates[name + '/' + id + '/' + path] = value;
+      this.rtdb.ref().update(updates).catch(err=> console.warn(err));
+    } else {
+      const list = this._localGet('gd_col_' + name, []);
+      let item = list.find(x=> String(x.id) === String(id));
+      if(!item){ item = { id }; list.push(item); }
+      const parts = path.split('/');
+      let obj = item;
+      for(let i = 0; i < parts.length - 1; i++){
+        if(!obj[parts[i]]) obj[parts[i]] = {};
+        obj = obj[parts[i]];
+      }
+      obj[parts[parts.length - 1]] = value;
+      this._localSet('gd_col_' + name, list);
+      this._notifyCollection(name);
+    }
+  },
   // отмечает достижения как разблокированные (nested unlocked.<achId> = true),
   // работает одинаково в облаке и локально
   markUnlocked(name, id, achIds){
