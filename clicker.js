@@ -239,26 +239,41 @@ const Clicker = {
   },
 
   renderShop(){
-    const shop = document.getElementById('clickerShop');
-    if(!shop || !this._ready) return;
+    const shopClick = document.getElementById('clickerShopClick');
+    const shopAuto = document.getElementById('clickerShopAuto');
+    if((!shopClick && !shopAuto) || !this._ready) return;
     const levels = this.data.upgradeLevels || {};
     const balance = this.data.balance || 0;
-    shop.innerHTML = this.upgrades.map(u=>{
-      const level = levels[u.id] || 0;
-      const cost = this.costFor(u, level);
-      const affordable = balance >= cost;
-      return `<div class="shop-item ${affordable ? '' : 'disabled'}">
-        <div class="shop-item-emoji">${u.emoji || '🥄'}</div>
-        <div class="shop-item-info">
-          <div class="shop-item-name">${escapeHtmlC(u.name)}${level > 0 ? ` <span class="shop-item-lvl">ур. ${level}</span>` : ''}</div>
-          <div class="shop-item-desc">${escapeHtmlC(u.desc || '')}</div>
-        </div>
-        <button class="shop-buy-btn" data-buy="${u.id}" ${affordable ? '' : 'disabled'}>${formatNum(cost)} 🥫</button>
-      </div>`;
-    }).join('') || '<p class="news-empty">Прокачек пока нет.</p>';
-    shop.querySelectorAll('[data-buy]').forEach(btn=>{
-      btn.addEventListener('click', ()=> this.buy(btn.dataset.buy));
-    });
+
+    const renderInto = (container, list)=>{
+      if(!container) return;
+      container.innerHTML = list.map(u=>{
+        const level = levels[u.id] || 0;
+        const cost = this.costFor(u, level);
+        const affordable = balance >= cost;
+        return `<div class="shop-item ${affordable ? '' : 'disabled'}">
+          <div class="shop-item-emoji">${u.emoji || '🥄'}</div>
+          <div class="shop-item-info">
+            <div class="shop-item-name">${escapeHtmlC(u.name)}${level > 0 ? ` <span class="shop-item-lvl">ур. ${level}</span>` : ''}</div>
+            <div class="shop-item-desc">${escapeHtmlC(u.desc || '')}</div>
+          </div>
+          <button class="shop-buy-btn" data-buy="${u.id}" ${affordable ? '' : 'disabled'}>${formatNum(cost)} 🥫</button>
+        </div>`;
+      }).join('') || '<p class="news-empty">Прокачек пока нет.</p>';
+      container.querySelectorAll('[data-buy]').forEach(btn=>{
+        btn.addEventListener('click', ()=> this.buy(btn.dataset.buy));
+      });
+    };
+
+    // делим прокачки на два независимых столбика по их типу: слева —
+    // всё, что повышает силу клика (type: 'click'), справа — всё, что
+    // даёт автоматический доход в секунду (type: 'auto'). Если у
+    // прокачки другой/неизвестный тип — на всякий случай оставляем её
+    // в столбике силы клика, чтобы она не потерялась из виду.
+    const clickUpgrades = this.upgrades.filter(u=> u.type !== 'auto');
+    const autoUpgrades = this.upgrades.filter(u=> u.type === 'auto');
+    renderInto(shopClick, clickUpgrades);
+    renderInto(shopAuto, autoUpgrades);
   }
 };
 

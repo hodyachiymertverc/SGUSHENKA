@@ -164,21 +164,25 @@ let toastQueue = [];
 let toastShowing = false;
 // scope: 'clicker' — тост только для достижений кликера, показываем,
 // только если сейчас открыт именно экран кликера. 'snake' — тост
-// только для достижений змейки, показываем, только если сейчас
-// открыт экран змейки (меню или сама игра). 'general' — тосты
-// общего профиля (очки/реакции/стрик/время на сайте), показываем
-// везде, КРОМЕ экрана кликера и экранов змейки — чтобы всплывающие
-// окна одной игры не появлялись поверх другой.
+// только для достижений Змейки.io, показываем, только если сейчас
+// открыт её экран (меню или сама игра). 'snakeClassic' — то же самое,
+// но для обычной (классической) змейки — у неё отдельные достижения
+// и отдельный экран. 'general' — тосты общего профиля (очки/реакции/
+// стрик/время на сайте), показываем везде, КРОМЕ экрана кликера и
+// экранов обеих змеек — чтобы всплывающие окна одной игры не
+// появлялись поверх другой.
 function showAchievementToast(a, scope){
   const onClickerScreen = isScreenVisible('clickerScreen');
   const onSnakeScreen = isScreenVisible('snakeGameScreen') || isScreenVisible('snakeMenuScreen');
+  const onSnakeClassicScreen = isScreenVisible('snakeClassicGameScreen') || isScreenVisible('snakeClassicMenuScreen');
   const onDoodleScreen = isScreenVisible('doodleGameScreen') || isScreenVisible('doodleMenuScreen');
   const onTTTScreen = isScreenVisible('tttGameScreen') || isScreenVisible('tttMenuScreen');
   if(scope === 'clicker' && !onClickerScreen) return;
   if(scope === 'snake' && !onSnakeScreen) return;
+  if(scope === 'snakeClassic' && !onSnakeClassicScreen) return;
   if(scope === 'doodle' && !onDoodleScreen) return;
   if(scope === 'ttt' && !onTTTScreen) return;
-  if(scope === 'general' && (onClickerScreen || onSnakeScreen || onDoodleScreen || onTTTScreen)) return;
+  if(scope === 'general' && (onClickerScreen || onSnakeScreen || onSnakeClassicScreen || onDoodleScreen || onTTTScreen)) return;
   toastQueue.push(a);
   if(!toastShowing) advanceToast();
 }

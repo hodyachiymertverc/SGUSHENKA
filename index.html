@@ -61,10 +61,15 @@
           <span class="game-pick-name">Кликер сгущёнки</span>
           <span class="game-pick-desc">Кликай, качайся, автоматизируй</span>
         </button>
-        <button class="game-pick" id="pickSnakeBtn">
+        <button class="game-pick" id="pickSnakeClassicBtn">
           <span class="game-pick-emoji">🐍</span>
-          <span class="game-pick-name">Змейка</span>
-          <span class="game-pick-desc">Собирай сгущёнку и расти</span>
+          <span class="game-pick-name">Змейка (классика)</span>
+          <span class="game-pick-desc">Обычная змейка на клетках</span>
+        </button>
+        <button class="game-pick" id="pickSnakeBtn">
+          <span class="game-pick-emoji">🟢</span>
+          <span class="game-pick-name">Змейка.io</span>
+          <span class="game-pick-desc">Улучшенная — против ботов и онлайн</span>
         </button>
         <button class="game-pick" id="pickDoodleBtn">
           <span class="game-pick-emoji">🧗</span>
@@ -161,16 +166,90 @@
       <p class="modal-note hidden" id="clickerLoadHint" style="text-align:center;color:var(--bad);font-weight:700;">
         Не удалось загрузить данные кликера. Проверь интернет-соединение или открой раздел «Диагностика» в админке.
       </p>
-      <div class="clicker-shop" id="clickerShop"></div>
+      <div class="clicker-shop-columns">
+        <div class="clicker-shop-column">
+          <h3 class="shop-col-title">💪 Сила клика</h3>
+          <div class="clicker-shop" id="clickerShopClick"></div>
+        </div>
+        <div class="clicker-shop-column">
+          <h3 class="shop-col-title">⚙️ Банки в секунду</h3>
+          <div class="clicker-shop" id="clickerShopAuto"></div>
+        </div>
+      </div>
     </div>
   </section>
 
   <!-- ЭКРАН МЕНЮ ЗМЕЙКИ -->
+  <!-- ЭКРАН МЕНЮ (змейка — классика) -->
+  <section id="snakeClassicMenuScreen" class="screen hidden">
+    <div class="menu-card">
+      <button class="btn btn-secondary btn-small back-btn" id="snakeClassicBackToSelectBtn">⬅ Выбор игры</button>
+      <h1 class="title">🐍 Змейка (классика)</h1>
+      <p class="subtitle">Собирай сгущёнку и расти — не врежься в стену, себя или бомбу!</p>
+
+      <div class="clicker-level-pill">
+        <span id="snakeClassicLevelEmoji">🥄</span>
+        <div class="clicker-level-text">
+          <span id="snakeClassicLevelName">Новичок-змейка</span>
+          <small id="snakeClassicLevelNext"></small>
+        </div>
+      </div>
+
+      <div class="game-pick-grid" style="margin-top:14px;">
+        <button class="game-pick" id="snakeClassicEasyBtn">
+          <span class="game-pick-emoji">🥄</span>
+          <span class="game-pick-name">Лёгкий</span>
+          <span class="game-pick-desc">Обычная змейка</span>
+        </button>
+        <button class="game-pick" id="snakeClassicHardBtn">
+          <span class="game-pick-emoji">💣</span>
+          <span class="game-pick-name">Сложный</span>
+          <span class="game-pick-desc">На поле появляются бомбы</span>
+        </button>
+      </div>
+
+      <div class="menu-buttons" style="margin-top:16px;">
+        <button class="btn btn-secondary" id="snakeClassicRecordsBtn">🏆 Рекорды</button>
+        <button class="btn btn-secondary" id="snakeClassicProfileBtn">🏅 Профиль и достижения</button>
+      </div>
+      <p class="hint">Двигай пальцем по полю (свайп) или стрелками/WASD.</p>
+    </div>
+  </section>
+
+  <!-- ЭКРАН ИГРЫ (змейка — классика) -->
+  <section id="snakeClassicGameScreen" class="screen hidden">
+    <div class="hud" id="snakeClassicHud">
+      <div class="score-pill">Очки: <span id="snakeClassicScoreValue">0</span></div>
+      <div class="score-pill" id="snakeClassicDiffPill">🥄 Лёгкий</div>
+      <button class="btn btn-small" id="snakeClassicPauseBtn">⏸ Пауза</button>
+      <button class="btn btn-small btn-danger" id="snakeClassicExitBtn">✖ Выход</button>
+    </div>
+    <div class="game-wrap snake-wrap" id="snakeClassicGameWrap">
+      <canvas id="snakeClassicCanvas"></canvas>
+      <div id="snakeClassicPauseOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2>Пауза</h2>
+          <button class="btn btn-primary" id="snakeClassicResumeBtn">▶ Продолжить</button>
+          <button class="btn btn-secondary" id="snakeClassicPauseExitBtn">В меню</button>
+        </div>
+      </div>
+      <div id="snakeClassicGameOverOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2 id="snakeClassicGameOverTitle">💥 Игра окончена!</h2>
+          <p class="final-score">Твой счёт: <span id="snakeClassicFinalScore">0</span></p>
+          <p id="snakeClassicNewRecordText" class="new-record hidden">🎉 Новый рекорд!</p>
+          <button class="btn btn-primary" id="snakeClassicRestartBtn">🔁 Играть снова</button>
+          <button class="btn btn-secondary" id="snakeClassicGoMenuBtn">В меню</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="snakeMenuScreen" class="screen hidden">
     <div class="menu-card">
       <button class="btn btn-secondary btn-small back-btn" id="snakeBackToSelectBtn">⬅ Выбор игры</button>
-      <h1 class="title">🐍 Змейка</h1>
-      <p class="subtitle">Собирай сгущёнку и расти — не врежься в стену, себя или бомбу!</p>
+      <h1 class="title">🟢 Змейка.io</h1>
+      <p class="subtitle">Собирай сгущёнку и расти — не врежься в границу мира или в других змей!</p>
 
       <div class="clicker-level-pill">
         <span id="snakeLevelEmoji">🥄</span>
@@ -486,7 +565,41 @@
   </div>
 </div>
 
-<!-- МОДАЛКА: РЕКОРДЫ ЗМЕЙКИ (2 вкладки) -->
+<!-- МОДАЛКА: РЕКОРДЫ ЗМЕЙКИ-КЛАССИКИ (2 вкладки) -->
+<div class="modal hidden" id="snakeClassicRecordsModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="snakeClassicRecordsModal">✖</button>
+    <h2>🏆 Рекорды змейки (классика)</h2>
+    <div class="records-tabs">
+      <button class="records-tab active" data-snakeclassictab="easy">🥄 Лёгкий</button>
+      <button class="records-tab" data-snakeclassictab="hard">💣 Сложный</button>
+    </div>
+    <ol class="records-list" id="snakeClassicRecordsListEasy"></ol>
+    <ol class="records-list hidden" id="snakeClassicRecordsListHard"></ol>
+  </div>
+</div>
+
+<!-- МОДАЛКА: ПРОФИЛЬ, УРОВЕНЬ И ДОСТИЖЕНИЯ ЗМЕЙКИ-КЛАССИКИ -->
+<div class="modal hidden" id="snakeClassicProfileModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="snakeClassicProfileModal">✖</button>
+    <h2>🏅 Профиль змейки (классика)</h2>
+    <div class="profile-level-block">
+      <div class="profile-level-emoji" id="snakeClassicProfileEmoji">🥄</div>
+      <div>
+        <div class="profile-level-name" id="snakeClassicProfileLevelName">Новичок-змейка</div>
+        <div class="profile-points-note"><span id="snakeClassicProfileCaught">0</span> банок поймано</div>
+      </div>
+    </div>
+    <div class="level-bar"><div class="level-bar-fill" id="snakeClassicProfileBarFill"></div></div>
+    <p class="modal-note" id="snakeClassicProfileNextLevel"></p>
+
+    <h2 style="margin-top:22px;">🏆 Достижения</h2>
+    <div class="ach-grid" id="snakeClassicAchievementsGrid"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: РЕКОРДЫ ЗМЕЙКИ.IO (2 вкладки) -->
 <div class="modal hidden" id="snakeRecordsModal">
   <div class="modal-card">
     <button class="modal-close" data-close="snakeRecordsModal">✖</button>
@@ -633,6 +746,7 @@
 <script src="events.js"></script>
 <script src="clicker.js"></script>
 <script src="snake.js"></script>
+<script src="snake-classic.js"></script>
 <script src="doodle.js"></script>
 <script src="tictactoe.js"></script>
 <script src="script.js"></script>

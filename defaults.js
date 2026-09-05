@@ -78,6 +78,25 @@ const DEFAULTS = {
     { id: 'sach8', emoji: '🌐', title: 'Онлайн-охотник',  desc: 'Набери 30 очков в онлайн-игре',         type: 'bestOnline', target: 30 }
   ],
 
+  /* ---- уровни в змейке-классике (по суммарно пойманным банкам за все игры) ---- */
+  snakeClassicLevels: [
+    { id: 'sclvl1', min: 0,   max: 14,     name: 'Новичок-змейка',  emoji: '🥄' },
+    { id: 'sclvl2', min: 15,  max: 39,     name: 'Голодная змейка', emoji: '🐍' },
+    { id: 'sclvl3', min: 40,  max: 89,     name: 'Ловкая змейка',   emoji: '⚡' },
+    { id: 'sclvl4', min: 90,  max: 199,    name: 'Королева банок',  emoji: '👑' },
+    { id: 'sclvl5', min: 200, max: 999999, name: 'Легенда змейки',  emoji: '🌟' }
+  ],
+
+  /* ---- достижения в змейке-классике ---- */
+  snakeClassicAchievements: [
+    { id: 'scach1', emoji: '🥄', title: 'Первая банка',   desc: 'Поймай первую сгущёнку в змейке',       type: 'caught',   target: 1 },
+    { id: 'scach2', emoji: '🍯', title: 'Сытая змейка',    desc: 'Поймай суммарно 50 банок',              type: 'caught',   target: 50 },
+    { id: 'scach3', emoji: '🏆', title: 'Сотня банок',     desc: 'Поймай суммарно 100 банок',             type: 'caught',   target: 100 },
+    { id: 'scach4', emoji: '🎮', title: 'Разминка',        desc: 'Сыграй 5 игр в змейку',                 type: 'games',    target: 5 },
+    { id: 'scach5', emoji: '🥇', title: 'Крепкий рекорд',  desc: 'Набери 20 очков на лёгком уровне',      type: 'bestEasy', target: 20 },
+    { id: 'scach6', emoji: '💣', title: 'Сапёр',           desc: 'Набери 15 очков на сложном уровне',     type: 'bestHard', target: 15 }
+  ],
+
   /* ---- уровни в Doodle-прыжках (по суммарной высоте за все игры) ---- */
   doodleLevels: [
     { id: 'dlvl1', min: 0,    max: 199,    name: 'Новичок-прыгун',      emoji: '🥄' },

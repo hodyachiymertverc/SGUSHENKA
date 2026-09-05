@@ -41,7 +41,7 @@ SNAKE_PARTICLE_SRCS.forEach(src=>{
 });
 
 /* ---------------- игровые константы ---------------- */
-const SNAKE_WORLD = 2600;                 // сторона квадратного мира
+const SNAKE_WORLD = 6000;                 // сторона квадратного мира (карта увеличена)
 const SNAKE_BASE_SPEED = 150;             // мировых единиц/сек
 const SNAKE_BOOST_SPEED = 270;
 const SNAKE_TURN_RATE = 3.4;              // рад/сек — как быстро игрок поворачивает
@@ -51,8 +51,11 @@ const SNAKE_GROW_PER_POINT = 15;
 const SNAKE_SEG_SPACING = 9;
 const SNAKE_BOOST_DRAIN_INTERVAL = 160;   // мс
 const SNAKE_BOOST_DRAIN_LEN = 6;
-const SNAKE_SMALL_FOOD_COUNT = 220;
-const SNAKE_BIG_FOOD_COUNT = 12;
+// количество еды масштабировано вместе с картой (площадь выросла
+// примерно в 5.3 раза относительно прежнего мира 2600×2600),
+// чтобы плотность еды на карте осталась примерно такой же
+const SNAKE_SMALL_FOOD_COUNT = 1160;
+const SNAKE_BIG_FOOD_COUNT = 64;
 const SNAKE_SMALL_FOOD_VALUE = 1;
 const SNAKE_BIG_FOOD_VALUE = 8;
 const SNAKE_ONLINE_MAX_PLAYERS = 6;
@@ -749,12 +752,11 @@ const Snake = {
     if(!p.alive) return;
     const skipHead = 12;
 
-    // сам с собой
-    for(let i = skipHead; i < p.trail.length; i++){
-      if(snakeDist(p.x, p.y, p.trail[i].x, p.trail[i].y) < this.collisionRadius(p)){
-        this.killSnake(p, 'self'); return;
-      }
-    }
+    // столкновение игрока с самим собой больше не убивает —
+    // по просьбе игрока змейка теперь свободно проходит сквозь
+    // собственное тело, погибнуть можно только о границу мира,
+    // ботов или другого игрока в онлайне.
+
     // с ботами (в обе стороны — кто врезался, тот и погиб)
     for(const b of this.bots){
       if(!b.alive) continue;

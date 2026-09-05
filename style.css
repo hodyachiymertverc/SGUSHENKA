@@ -428,7 +428,22 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 .clicker-stat b{ color: var(--pink); }
 
 .shop-title{ text-align:center; font-size:1.1rem; margin: 16px 0 10px; }
-.clicker-shop{ display:flex; flex-direction:column; gap:10px; max-width:520px; margin:0 auto; }
+/* два независимых столбика прокачки: слева — сила клика,
+   справа — банки в секунду. На узких экранах складываются в один
+   столбик друг под другом. */
+.clicker-shop-columns{
+  display:grid; grid-template-columns: 1fr 1fr; gap:18px;
+  max-width:1000px; margin:0 auto;
+}
+@media (max-width: 720px){
+  .clicker-shop-columns{ grid-template-columns: 1fr; }
+}
+.clicker-shop-column{ min-width:0; }
+.shop-col-title{
+  font-family:'Baloo 2',sans-serif; font-weight:800; font-size:1rem;
+  text-align:center; margin: 0 0 10px;
+}
+.clicker-shop{ display:flex; flex-direction:column; gap:10px; margin:0 auto; }
 .shop-item{
   display:flex; align-items:center; gap:10px;
   background: var(--white); border-radius:16px; padding:10px 12px;
@@ -475,6 +490,15 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
   background: #12141f;
   border-radius: 0; border: none; box-shadow:none;
   touch-action: none; cursor: crosshair;
+}
+/* классическая (обычная) змейка — светлое поле на клетках,
+   в отличие от тёмного космоса Змейки.io выше. Обёртка .snake-wrap
+   уже даёт рамку/тень/скругление, поэтому у самого канваса они не нужны. */
+#snakeClassicCanvas{
+  display:block; width:100%; height:100%;
+  background: linear-gradient(180deg, #BEE7F5 0%, #FFF3D6 100%);
+  border-radius: 0; border: none; box-shadow:none;
+  touch-action:none;
 }
 
 /* круглые кнопки поверх канваса (выход/пауза) */

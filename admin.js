@@ -36,6 +36,11 @@ let unsubSnakeOnline = null;
 let currentSnakeEasyList = [];
 let currentSnakeHardList = [];
 
+let unsubSnakeClassicEasy = null;
+let unsubSnakeClassicHard = null;
+let currentSnakeClassicEasyList = [];
+let currentSnakeClassicHardList = [];
+
 let unsubDoodleRecords = null;
 let currentDoodleRecordsList = [];
 
@@ -72,6 +77,14 @@ function tryLogin(){
     });
     unsubSnakeOnline = DB.watchRecordsIn('snakeRecordsOnline', list=>{
       renderAdminSnakeRecords('adminSnakeRecordsOnline', list, 'snakeRecordsOnline');
+    });
+    unsubSnakeClassicEasy = DB.watchRecordsIn('snakeClassicRecordsEasy', list=>{
+      currentSnakeClassicEasyList = list;
+      renderAdminSnakeRecords('adminSnakeClassicRecordsEasy', list, 'snakeClassicRecordsEasy');
+    });
+    unsubSnakeClassicHard = DB.watchRecordsIn('snakeClassicRecordsHard', list=>{
+      currentSnakeClassicHardList = list;
+      renderAdminSnakeRecords('adminSnakeClassicRecordsHard', list, 'snakeClassicRecordsHard');
     });
     unsubDoodleRecords = DB.watchRecordsIn('doodleRecords', list=>{
       currentDoodleRecordsList = list;
@@ -270,7 +283,11 @@ const snakeRecordsRegistry = {
   snakeRecordsEasy:   { list: [], state: { editingId: null }, containerId: 'adminSnakeRecordsEasy' },
   snakeRecordsMedium: { list: [], state: { editingId: null }, containerId: 'adminSnakeRecordsMedium' },
   snakeRecordsHard:   { list: [], state: { editingId: null }, containerId: 'adminSnakeRecordsHard' },
-  snakeRecordsOnline: { list: [], state: { editingId: null }, containerId: 'adminSnakeRecordsOnline' }
+  snakeRecordsOnline: { list: [], state: { editingId: null }, containerId: 'adminSnakeRecordsOnline' },
+  // Змейка-классика — отдельная игра, отдельные рекорды (только
+  // лёгкий/сложный — там нет ни среднего уровня, ни онлайна)
+  snakeClassicRecordsEasy: { list: [], state: { editingId: null }, containerId: 'adminSnakeClassicRecordsEasy' },
+  snakeClassicRecordsHard: { list: [], state: { editingId: null }, containerId: 'adminSnakeClassicRecordsHard' }
 };
 function renderAdminSnakeRecords(containerId, list, collectionName){
   const entry = snakeRecordsRegistry[collectionName];
@@ -278,6 +295,8 @@ function renderAdminSnakeRecords(containerId, list, collectionName){
   entry.list = list;
   if(collectionName === 'snakeRecordsEasy') currentSnakeEasyList = list;
   if(collectionName === 'snakeRecordsHard') currentSnakeHardList = list;
+  if(collectionName === 'snakeClassicRecordsEasy') currentSnakeClassicEasyList = list;
+  if(collectionName === 'snakeClassicRecordsHard') currentSnakeClassicHardList = list;
   renderRecordsAdmin(containerId, list, {
     updateFn: (id, patch)=> DB.updateRecordIn(collectionName, id, patch),
     deleteFn: (id)=> DB.deleteRecordIn(collectionName, id),
@@ -295,10 +314,12 @@ function bindClearSnakeBtn(btnId, collectionName, label){
     }
   });
 }
-bindClearSnakeBtn('clearSnakeEasyBtn', 'snakeRecordsEasy', 'лёгкий уровень');
-bindClearSnakeBtn('clearSnakeMediumBtn', 'snakeRecordsMedium', 'средний уровень');
-bindClearSnakeBtn('clearSnakeHardBtn', 'snakeRecordsHard', 'сложный уровень');
-bindClearSnakeBtn('clearSnakeOnlineBtn', 'snakeRecordsOnline', 'онлайн');
+bindClearSnakeBtn('clearSnakeEasyBtn', 'snakeRecordsEasy', 'лёгкий уровень, Змейка.io');
+bindClearSnakeBtn('clearSnakeMediumBtn', 'snakeRecordsMedium', 'средний уровень, Змейка.io');
+bindClearSnakeBtn('clearSnakeHardBtn', 'snakeRecordsHard', 'сложный уровень, Змейка.io');
+bindClearSnakeBtn('clearSnakeOnlineBtn', 'snakeRecordsOnline', 'онлайн, Змейка.io');
+bindClearSnakeBtn('clearSnakeClassicEasyBtn', 'snakeClassicRecordsEasy', 'лёгкий уровень, змейка-классика');
+bindClearSnakeBtn('clearSnakeClassicHardBtn', 'snakeClassicRecordsHard', 'сложный уровень, змейка-классика');
 
 /* ---------------- DOODLE-ПРЫЖКИ: рекорды ---------------- */
 const doodleRecordsState = { editingId: null };
@@ -635,6 +656,43 @@ function mountAllConfigSections(){
     ],
     summary(item){
       return { title: `${item.emoji || ''} ${item.title || ''}`, sub: `${item.desc || ''} · условие: ${item.target} (${snakeAchTypeLabels[item.type] || item.type})` };
+    }
+  });
+
+  /* ---- уровни змейки-классики (отдельная игра, отдельная коллекция) ---- */
+  mountConfigSection({
+    collection: 'snakeClassicLevels',
+    addFormElId: 'snakeClassicLevelsAddForm', addBtnId: 'snakeClassicLevelsAddBtn', listElId: 'snakeClassicLevelsList',
+    seed: (window.DEFAULTS && DEFAULTS.snakeClassicLevels) || [],
+    emptyText: 'Пока нет уровней.',
+    fields: [
+      { key:'emoji', label:'Эмодзи', type:'text', default:'🥄' },
+      { key:'name',  label:'Название', type:'text', default:'' },
+      { key:'min',   label:'От (банок поймано)', type:'number', default:0 },
+      { key:'max',   label:'До (банок поймано)', type:'number', default:10 }
+    ],
+    summary(item){ return { title: `${item.emoji || ''} ${item.name || ''}`, sub: `${item.min}–${item.max} банок поймано` }; }
+  });
+
+  /* ---- достижения змейки-классики ---- */
+  const snakeClassicAchTypeLabels = { caught:'банок поймано всего', games:'игр сыграно', bestEasy:'рекорд (лёгкий)', bestHard:'рекорд (сложный)' };
+  mountConfigSection({
+    collection: 'snakeClassicAchievements',
+    addFormElId: 'snakeClassicAchievementsAddForm', addBtnId: 'snakeClassicAchievementsAddBtn', listElId: 'snakeClassicAchievementsList',
+    seed: (window.DEFAULTS && DEFAULTS.snakeClassicAchievements) || [],
+    emptyText: 'Пока нет достижений.',
+    fields: [
+      { key:'emoji', label:'Эмодзи', type:'text', default:'🏆' },
+      { key:'title', label:'Название', type:'text', default:'' },
+      { key:'desc',  label:'Описание', type:'textarea', default:'' },
+      { key:'type',  label:'Тип условия', type:'select', default:'caught', options: [
+        ['caught','Банок поймано всего'], ['games','Игр сыграно'], ['bestEasy','Рекорд на лёгком уровне'],
+        ['bestHard','Рекорд на сложном уровне']
+      ]},
+      { key:'target', label:'Нужное значение', type:'number', default:1 }
+    ],
+    summary(item){
+      return { title: `${item.emoji || ''} ${item.title || ''}`, sub: `${item.desc || ''} · условие: ${item.target} (${snakeClassicAchTypeLabels[item.type] || item.type})` };
     }
   });
 
@@ -1009,15 +1067,20 @@ const DIAG_COLLECTIONS = [
   { name: 'clickerAchievements', label: 'Кликер: достижения' },
   { name: 'clickerUpgrades',     label: 'Кликер: прокачки' },
   { name: 'clickerPlayers',      label: 'Кликер: балансы игроков' },
-  { name: 'snakeLevels',         label: 'Змейка: уровни' },
-  { name: 'snakeAchievements',   label: 'Змейка: достижения' },
-  { name: 'snakePlayers',        label: 'Змейка: профили игроков' },
-  { name: 'snakeRecordsEasy',    label: 'Змейка: рекорды (лёгкий)' },
-  { name: 'snakeRecordsMedium',  label: 'Змейка: рекорды (средний)' },
-  { name: 'snakeRecordsHard',    label: 'Змейка: рекорды (сложный)' },
-  { name: 'snakeRecordsOnline',  label: 'Змейка: рекорды (онлайн)' },
-  { name: 'snakeRooms',          label: 'Змейка: онлайн-комнаты' },
-  { name: 'snakeOnlinePlayers',  label: 'Змейка: онлайн-игроки' },
+  { name: 'snakeLevels',         label: 'Змейка.io: уровни' },
+  { name: 'snakeAchievements',   label: 'Змейка.io: достижения' },
+  { name: 'snakePlayers',        label: 'Змейка.io: профили игроков' },
+  { name: 'snakeRecordsEasy',    label: 'Змейка.io: рекорды (лёгкий)' },
+  { name: 'snakeRecordsMedium',  label: 'Змейка.io: рекорды (средний)' },
+  { name: 'snakeRecordsHard',    label: 'Змейка.io: рекорды (сложный)' },
+  { name: 'snakeRecordsOnline',  label: 'Змейка.io: рекорды (онлайн)' },
+  { name: 'snakeRooms',          label: 'Змейка.io: онлайн-комнаты' },
+  { name: 'snakeOnlinePlayers',  label: 'Змейка.io: онлайн-игроки' },
+  { name: 'snakeClassicLevels',        label: 'Змейка-классика: уровни' },
+  { name: 'snakeClassicAchievements',  label: 'Змейка-классика: достижения' },
+  { name: 'snakeClassicPlayers',       label: 'Змейка-классика: профили игроков' },
+  { name: 'snakeClassicRecordsEasy',   label: 'Змейка-классика: рекорды (лёгкий)' },
+  { name: 'snakeClassicRecordsHard',   label: 'Змейка-классика: рекорды (сложный)' },
   { name: 'doodleLevels',        label: 'Doodle-прыжки: уровни' },
   { name: 'doodleAchievements',  label: 'Doodle-прыжки: достижения' },
   { name: 'doodlePlayers',       label: 'Doodle-прыжки: профили игроков' },
@@ -1078,7 +1141,9 @@ async function runDiagnostics(){
 clickerLevels, clickerAchievements, clickerUpgrades, clickerPlayers,
 snakeLevels, snakeAchievements, snakePlayers, snakeRecordsEasy,
 snakeRecordsMedium, snakeRecordsHard, snakeRecordsOnline, snakeRooms,
-snakeOnlinePlayers, doodleLevels, doodleAchievements, doodlePlayers,
+snakeOnlinePlayers, snakeClassicLevels, snakeClassicAchievements,
+snakeClassicPlayers, snakeClassicRecordsEasy, snakeClassicRecordsHard,
+doodleLevels, doodleAchievements, doodlePlayers,
 doodleRecords — по аналогии с тем, как уже разрешены records и news).`;
   } else if(hintEl){
     hintEl.classList.add('hidden');

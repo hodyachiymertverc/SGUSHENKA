@@ -95,7 +95,8 @@
       <button class="admin-tab active" data-tab="news">📰 Новости</button>
       <button class="admin-tab" data-tab="catch">🍯 Лови сгущёнку!</button>
       <button class="admin-tab" data-tab="clicker">🥫 Кликер сгущёнки</button>
-      <button class="admin-tab" data-tab="snake">🐍 Змейка</button>
+      <button class="admin-tab" data-tab="snakeClassic">🐍 Змейка (классика)</button>
+      <button class="admin-tab" data-tab="snake">🟢 Змейка.io</button>
       <button class="admin-tab" data-tab="doodle">🧗 Doodle-прыжки</button>
       <button class="admin-tab" data-tab="ttt">❌⭕ Крестики-нолики</button>
     </div>
@@ -183,6 +184,40 @@
     </div>
 
     <!-- ===================== ВКЛАДКА: ЗМЕЙКА ===================== -->
+    <!-- ===================== ВКЛАДКА: ЗМЕЙКА (КЛАССИКА) ===================== -->
+    <div class="admin-tab-panel hidden" data-panel="snakeClassic">
+      <div class="admin-card">
+        <h2>🏆 Рекорды — лёгкий уровень</h2>
+        <p class="modal-note">Отдельная таблица рекордов для лёгкого режима обычной (классической) змейки.</p>
+        <button class="btn btn-danger btn-small" id="clearSnakeClassicEasyBtn">Очистить рекорды (лёгкий)</button>
+        <div id="adminSnakeClassicRecordsEasy"></div>
+      </div>
+
+      <div class="admin-card">
+        <h2>🏆 Рекорды — сложный уровень</h2>
+        <p class="modal-note">Отдельная таблица рекордов для сложного режима обычной (классической) змейки (с бомбами).</p>
+        <button class="btn btn-danger btn-small" id="clearSnakeClassicHardBtn">Очистить рекорды (сложный)</button>
+        <div id="adminSnakeClassicRecordsHard"></div>
+      </div>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">📈 Уровни змейки (классика)</h2></summary>
+        <p class="modal-note">Диапазоны считаются от суммарно пойманных банок за все игры (лёгкий + сложный вместе). Это отдельные уровни от Змейки.io.</p>
+        <div id="snakeClassicLevelsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="snakeClassicLevelsAddBtn" style="margin-top:8px;">+ Добавить уровень</button>
+        <div id="snakeClassicLevelsList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🏆 Достижения змейки (классика)</h2></summary>
+        <p class="modal-note">Условие проверяется автоматически по накопленной статистике игрока в обычной змейке. Отдельные достижения от Змейки.io.</p>
+        <div id="snakeClassicAchievementsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="snakeClassicAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
+        <div id="snakeClassicAchievementsList" style="margin-top:12px;"></div>
+      </details>
+    </div>
+
+    <!-- ===================== ВКЛАДКА: ЗМЕЙКА.IO (УЛУЧШЕННАЯ) ===================== -->
     <div class="admin-tab-panel hidden" data-panel="snake">
       <div class="admin-card">
         <h2>🏆 Рекорды — лёгкий уровень</h2>
