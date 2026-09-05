@@ -304,18 +304,38 @@ const Snake = {
     const h = snakeHashSeed(seed);
     return `hsl(${h % 360},72%,56%)`;
   },
-  // палитра из 3 оттенков для одной змейки — раньше всё тело красилось
-  // одним сплошным цветом (s.color), теперь вдоль тела рисуется плавный
-  // переход между несколькими оттенками одного и того же случайного
-  // "сида" (те же ID/имя, что и раньше), поэтому змейки выглядят
-  // разноцветными, а не однотонными, и при этом каждая по-прежнему
-  // стабильно узнаётся по своей гамме между кадрами/перезаходами.
+  // раньше здесь была палитра из 3 БЛИЗКИХ оттенков одного тона,
+  // которые рисовались плавным градиентом вдоль тела — из-за этого все
+  // змейки выглядели как варианты одного и того же "переливающегося"
+  // цвета. Теперь генерируются 2-3 ЗАМЕТНО РАЗНЫХ цвета (иногда с
+  // добавлением белой/тёмной полосы для контраста) — они рисуются
+  // сплошными чередующимися полосами (см. drawSnakeBody), а не
+  // градиентом, поэтому один бот может быть жёлто-синим, другой —
+  // красно-сине-белым, третий — зелёно-красным и т.д. Палитра по-прежнему
+  // стабильна для одного и того же "сида" (id/имя), чтобы змейку было
+  // легко узнать между кадрами и после респауна.
   paletteFor(seed){
     const h = snakeHashSeed(seed);
     const h1 = h % 360;
-    const h2 = (h1 + 46 + (h % 37)) % 360;
-    const h3 = (h1 + 190 + (h % 53)) % 360;
-    return [`hsl(${h1},78%,58%)`, `hsl(${h2},82%,66%)`, `hsl(${h3},72%,48%)`];
+    const h2 = (h1 + 90 + (h % 97)) % 360; // далеко от h1 по кругу — не соседний оттенок
+    const includeNeutral = (h % 7) < 2;    // иногда добавляем белую/тёмную полосу для контраста
+    const useThird = (h % 5) !== 0;        // большинство скинов — из 3 цветов, часть — из 2
+    const colors = [`hsl(${h1},75%,55%)`, `hsl(${h2},75%,55%)`];
+    if(includeNeutral){
+      colors.push((h % 14) < 7 ? '#F4F4F4' : '#242424');
+    } else if(useThird){
+      const h3 = (h1 + 200 + (h % 61)) % 360;
+      colors.push(`hsl(${h3},70%,50%)`);
+    }
+    return colors;
+  },
+  // фактические цвета скина конкретной змейки: если у неё выбран
+  // конкретный скин (s.skin.colors — задаётся при выборе в меню, см.
+  // применение скинов ниже), используем его; иначе — как и раньше,
+  // стабильный набор по "сиду" (id/имя)
+  skinColorsFor(s){
+    if(s && s.skin && Array.isArray(s.skin.colors) && s.skin.colors.length) return s.skin.colors;
+    return this.paletteFor((s && (s.id || s.name)) || s);
   },
   genRoomCode(){
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -832,24 +852,76 @@ const Snake = {
   updateBotAI(dt){
     const half = SNAKE_WORLD / 2;
     const margin = 220;
+    // общий список "тел", о которые бот может разбиться, — считаем один
+    // раз на весь вызов (а не заново для каждого бота), чтобы не тратить
+    // время на повторный сбор одних и тех же змей 10-20 раз за кадр
+    const allSnakes = [this.player].concat(this.bots).filter(s=> s.alive);
+    const peerSnakes = this.mode === 'online' ? Object.values(this.peers || {}).filter(p=> p.alive) : [];
+    const obstacles = allSnakes.concat(peerSnakes);
+
     this.bots.forEach(b=>{
       if(!b.alive) return;
       if(Math.abs(b.x) > half - margin || Math.abs(b.y) > half - margin){
         b.targetAngle = Math.atan2(-b.y, -b.x);
+        b.boosting = false;
+        b._avoiding = 0;
         return;
       }
-      b._retarget = (b._retarget || 0) - dt;
-      if(b._retarget > 0) return;
-      b._retarget = 0.5 + Math.random() * 0.7;
 
       const preset = SNAKE_BOT_PRESETS[b.diffKey] || SNAKE_BOT_PRESETS.medium;
+
+      // --- срочное уклонение от чужого ТЕЛА впереди по курсу ---
+      // раньше боты вообще не замечали чужие тела (только "голову"
+      // другой змейки — см. findNearest ниже), из-за чего они то и дело
+      // слепо въезжали в длинный хвост соседа или игрока. Эта проверка
+      // идёт чаще, чем обычное "перепланирование" курса, и имеет над
+      // ним приоритет на короткое время, пока бот уходит с опасного пути.
+      b._avoidCheck = (b._avoidCheck || 0) - dt;
+      if(b._avoidCheck <= 0){
+        b._avoidCheck = 0.12;
+        const danger = this.botLookaheadDanger(b, obstacles);
+        if(danger){
+          b.targetAngle = danger.escapeAngle;
+          b._avoiding = 0.45;
+        }
+      }
+      if((b._avoiding || 0) > 0){
+        b._avoiding -= dt;
+        return; // пока уклоняемся от столкновения — не даём остальному ИИ перебить курс
+      }
+
+      b._retarget = (b._retarget || 0) - dt;
+      if(b._retarget > 0) return;
+      // более сложные (агрессивные) боты передумывают чаще — реагируют
+      // на изменение обстановки быстрее, а не только раз в 0.5-1.2с,
+      // как было раньше для всех уровней сложности одинаково
+      const baseInterval = snakeClamp(0.85 - preset.aggression * 0.55, 0.28, 0.85);
+      b._retarget = baseInterval * (0.7 + Math.random() * 0.6);
+
       const threat = this.findNearest(b, preset.sight, other=> other.len > b.len * 1.15);
-      if(threat){ b.targetAngle = Math.atan2(b.y - threat.y, b.x - threat.x); return; }
+      if(threat){
+        b.targetAngle = Math.atan2(b.y - threat.y, b.x - threat.x);
+        // от серьёзной угрозы боты теперь могут убегать на ускорении
+        // (если могут себе это позволить по длине) — раньше буст ботам
+        // вообще не был доступен, и от погони было слишком легко уйти
+        const closeBy = snakeDist(b.x, b.y, threat.x, threat.y) < preset.sight * 0.5;
+        b.boosting = closeBy && b.len > SNAKE_MIN_LEN + 220;
+        return;
+      }
 
       if(Math.random() < preset.aggression){
         const prey = this.findNearest(b, preset.sight, other=> other.len < b.len * 0.85);
-        if(prey){ b.targetAngle = Math.atan2(prey.y - b.y, prey.x - b.x); return; }
+        if(prey){
+          b.targetAngle = Math.atan2(prey.y - b.y, prey.x - b.x);
+          // короткий рывок на добивание добычи вблизи — тоже раньше
+          // был недоступен ботам, из-за чего погоня почти никогда не
+          // приводила к успеху
+          const d = snakeDist(b.x, b.y, prey.x, prey.y);
+          b.boosting = d < 160 && b.len > SNAKE_MIN_LEN + 150 && Math.random() < 0.5;
+          return;
+        }
       }
+      b.boosting = false;
 
       let nearestFood = null, nearestD = preset.sight;
       this.food.forEach(f=>{
@@ -860,11 +932,59 @@ const Snake = {
       else { b.targetAngle = b.angle + (Math.random() - 0.5) * 1.6; }
     });
   },
+  // дешёвая проверка "не влетит ли бот в чужое тело, если продолжит
+  // ехать текущим курсом" — пробует несколько точек впереди по курсу на
+  // разном расстоянии; если там опасно, перебирает запасные углы (от
+  // ближайших к текущему курсу до полного разворота) и возвращает первый
+  // свободный. Специально не претендует на идеальную точность (использует
+  // тот же принцип "шаг по следу", что и bodyHit) — этого достаточно,
+  // чтобы бот перестал казаться слепым, но не нагружает игру лишним.
+  botLookaheadDanger(b, allObstacles){
+    const speed = SNAKE_BASE_SPEED * (b.speedMult || 1);
+    const probeDists = [speed * 0.35, speed * 0.7, speed * 1.15];
+    const dangerR = this.collisionRadius(b) + 14;
+    const lookRange = probeDists[probeDists.length - 1] + 260;
+
+    // грубый отсев: тела змей, которые заведомо слишком далеко, чтобы
+    // хоть один их сегмент попал в радиус проверки, вообще не смотрим
+    const relevant = allObstacles.filter(other=> other !== b && snakeDist(b.x, b.y, other.x, other.y) < lookRange + (other.len || 0) * 0.5);
+    if(!relevant.length) return null;
+
+    const trails = relevant.map(other=> this.visibleSpanTrail(other));
+
+    const hitsObstacle = (angle)=>{
+      for(const dist of probeDists){
+        const px = b.x + Math.cos(angle) * dist;
+        const py = b.y + Math.sin(angle) * dist;
+        for(const trail of trails){
+          if(!trail || !trail.length) continue;
+          const stride = Math.max(1, Math.floor(trail.length / 40));
+          for(let i = 0; i < trail.length; i += stride){
+            if(snakeDist(px, py, trail[i].x, trail[i].y) < dangerR) return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    if(!hitsObstacle(b.angle)) return null; // курс впереди свободен
+
+    const offsets = [0.5, -0.5, 0.9, -0.9, 1.4, -1.4, 2.2, -2.2, Math.PI];
+    for(const off of offsets){
+      const angle = b.angle + off;
+      if(!hitsObstacle(angle)) return { escapeAngle: angle };
+    }
+    return { escapeAngle: b.angle + Math.PI }; // со всех сторон тела — хотя бы развернуться
+  },
   // ищет ближайшую другую (живую) змейку в радиусе sight, для которой
-  // predicate(other) верен — используется и для "угрозы", и для "добычи"
+  // predicate(other) верен — используется и для "угрозы", и для "добычи".
+  // В онлайне теперь учитываются и реальные соперники (peers), а не
+  // только боты и сам игрок — раньше боты полностью игнорировали живых
+  // онлайн-игроков при выборе цели/угрозы.
   findNearest(self, sight, predicate){
     let best = null, bestD = sight;
     const candidates = [this.player].concat(this.bots);
+    if(this.mode === 'online') Array.prototype.push.apply(candidates, Object.values(this.peers || {}));
     candidates.forEach(other=>{
       if(other === self || !other.alive) return;
       if(!predicate(other)) return;
@@ -1103,34 +1223,41 @@ const Snake = {
     const r = this.collisionRadius(s);
     if(pts.length < 2) pts.push({ x: s.x - Math.cos(s.angle) * 4, y: s.y - Math.sin(s.angle) * 4 });
 
-    const path = new Path2D();
-    path.moveTo(pts[0].x, pts[0].y);
-    for(let i = 1; i < pts.length; i++) path.lineTo(pts[i].x, pts[i].y);
+    const outline = new Path2D();
+    outline.moveTo(pts[0].x, pts[0].y);
+    for(let i = 1; i < pts.length; i++) outline.lineTo(pts[i].x, pts[i].y);
 
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     ctx.strokeStyle = 'rgba(0,0,0,0.3)';
     ctx.lineWidth = r * 2 + 3;
-    ctx.stroke(path);
+    ctx.stroke(outline);
 
-    // разноцветное тело: плавный градиент из 3 оттенков вдоль всей
-    // длины тела (от головы к кончику хвоста) вместо одной сплошной
-    // заливки — палитра стабильна для каждой змейки (тот же "сид",
-    // что и раньше у s.color), поэтому её легко узнать между кадрами
-    const tail = pts[pts.length - 1];
-    const palette = this.paletteFor(s.id || s.name);
-    let fillStyle;
-    if(Math.abs(tail.x - pts[0].x) < 0.5 && Math.abs(tail.y - pts[0].y) < 0.5){
-      fillStyle = palette[0];
-    } else {
-      const grad = ctx.createLinearGradient(pts[0].x, pts[0].y, tail.x, tail.y);
-      grad.addColorStop(0, palette[0]);
-      grad.addColorStop(0.5, palette[1]);
-      grad.addColorStop(1, palette[2]);
-      fillStyle = grad;
-    }
-    ctx.strokeStyle = fillStyle;
+    // тело: чередующиеся ОДНОТОННЫЕ полосы из цветов скина змейки — не
+    // плавный градиент, как было раньше, а именно отдельные сплошные
+    // куски цвета друг за другом (как классический "полосатый" окрас),
+    // поэтому даже на глаз видно, что у змейки несколько разных цветов,
+    // а не один цвет с переливом
+    const palette = this.skinColorsFor(s);
+    const bandLen = 30; // длина одной полосы вдоль тела, в игровых единицах
     ctx.lineWidth = r * 2;
-    ctx.stroke(path);
+    let acc = 0, bandIdx = 0;
+    let path = new Path2D();
+    path.moveTo(pts[0].x, pts[0].y);
+    for(let i = 1; i < pts.length; i++){
+      const a = pts[i - 1], b = pts[i];
+      acc += snakeDist(a.x, a.y, b.x, b.y);
+      path.lineTo(b.x, b.y);
+      if(acc >= bandLen){
+        ctx.strokeStyle = palette[bandIdx % palette.length];
+        ctx.stroke(path);
+        bandIdx++;
+        acc = 0;
+        path = new Path2D();
+        path.moveTo(b.x, b.y); // следующая полоса продолжается с той же точки — без разрывов
+      }
+    }
+    ctx.strokeStyle = palette[bandIdx % palette.length];
+    ctx.stroke(path); // дорисовываем "хвостик" последней неполной полосы
 
     // глаза на голове, смотрят по направлению движения
     const hx = s.x, hy = s.y;
