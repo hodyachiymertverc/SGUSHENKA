@@ -233,7 +233,17 @@ const SnakeClassic = {
     const hud = document.getElementById('snakeClassicHud');
     const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
     const used = (topbar ? topbar.offsetHeight : 0) + (hud ? hud.offsetHeight : 0) + 40;
-    const height = Math.max(260, vh - used);
+    // раньше здесь был фиксированный нижний порог (260px), который на
+    // невысоких экранах (например, телефон в альбомной ориентации,
+    // где HUD из-за длинного текста сложности переносится на 2 строки)
+    // мог оказаться БОЛЬШЕ реально доступного места — из-за этого поле
+    // становилось выше видимой области экрана и как будто "вылезало"
+    // за рамку. Теперь высота никогда не превышает доступное вертикальное
+    // пространство: нижний порог применяется только пока он не превышает
+    // vh - used.
+    const available = Math.max(0, vh - used);
+    const minHeight = Math.min(220, available || 220);
+    const height = Math.max(minHeight, available);
     wrap.style.height = height + 'px';
     canvas.style.height = height + 'px';
     this.resizeCanvasBuffer();
@@ -258,6 +268,11 @@ const SnakeClassic = {
     if(diffPill) diffPill.textContent = diff === 'hard' ? '💣 Сложный' : '🥄 Лёгкий';
 
     this.fitCanvas();
+    // подстраховка: через кадр ещё раз пересчитываем размер — сразу
+    // после снятия .hidden браузер иногда ещё не успел применить
+    // перенос строк в HUD (например, если добавляется/меняется текст
+    // сложности), из-за чего первый расчёт высоты может быть неточным
+    requestAnimationFrame(()=> this.fitCanvas());
 
     const canvas = document.getElementById('snakeClassicCanvas');
     const rect = canvas.getBoundingClientRect();
@@ -412,9 +427,15 @@ const SnakeClassic = {
     const rect = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    const cs = Math.min(rect.width / this.cols, rect.height / this.rows);
-    const offX = (rect.width - cs * this.cols) / 2;
-    const offY = (rect.height - cs * this.rows) / 2;
+    // небольшой отступ от самого края канваса — чтобы толстая стена
+    // поля никогда не рисовалась впритык к границе (и тем более не
+    // "вылезала" за неё из-за субпиксельного округления при масштабировании)
+    const PAD = 3;
+    const innerW = Math.max(0, rect.width - PAD * 2);
+    const innerH = Math.max(0, rect.height - PAD * 2);
+    const cs = Math.min(innerW / this.cols, innerH / this.rows);
+    const offX = PAD + (innerW - cs * this.cols) / 2;
+    const offY = PAD + (innerH - cs * this.rows) / 2;
 
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.fillRect(offX, offY, cs * this.cols, cs * this.rows);

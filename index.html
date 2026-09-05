@@ -219,8 +219,7 @@
   <!-- ЭКРАН ИГРЫ (змейка — классика) -->
   <section id="snakeClassicGameScreen" class="screen hidden">
     <div class="hud" id="snakeClassicHud">
-      <div class="score-pill">Очки: <span id="snakeClassicScoreValue">0</span></div>
-      <div class="score-pill" id="snakeClassicDiffPill">🥄 Лёгкий</div>
+      <div class="score-pill"><span id="snakeClassicDiffPill">🥄 Лёгкий</span> · Очки: <span id="snakeClassicScoreValue">0</span></div>
       <button class="btn btn-small" id="snakeClassicPauseBtn">⏸ Пауза</button>
       <button class="btn btn-small btn-danger" id="snakeClassicExitBtn">✖ Выход</button>
     </div>
@@ -304,6 +303,15 @@
         <input class="text-input" id="snakeOnlineJoinInput" maxlength="8" placeholder="Код комнаты друга">
         <button class="btn btn-secondary btn-small" id="snakeOnlineJoinBtn">Войти по коду</button>
       </div>
+      <p class="modal-note hidden" id="snakeOnlineJoinError" style="color:var(--pink);"></p>
+
+      <div id="snakeOnlineRoomsWrap" style="margin-top:14px; text-align:left;">
+        <p class="modal-note" style="margin-bottom:6px;">🌐 Сейчас ищут игру:</p>
+        <div class="records-list" id="snakeOnlineRoomsList" style="max-height:160px; overflow-y:auto; padding-left:0;">
+          <p class="news-empty">Пока никто не ищет — можешь стать первым!</p>
+        </div>
+      </div>
+
       <button class="btn btn-primary" id="snakeOnlineStartBtn" style="margin-top:14px;">▶ Начать игру</button>
       <button class="btn btn-secondary" id="snakeOnlineCancelBtn2" style="margin-top:8px;">Отмена</button>
     </div>

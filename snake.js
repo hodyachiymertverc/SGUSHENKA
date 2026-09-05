@@ -59,12 +59,14 @@ const SNAKE_BIG_FOOD_COUNT = 64;
 const SNAKE_SMALL_FOOD_VALUE = 1;
 const SNAKE_BIG_FOOD_VALUE = 8;
 const SNAKE_ONLINE_MAX_PLAYERS = 6;
+const SNAKE_ONLINE_SYNC_INTERVAL = 0.15;  // сек между публикациями своей позиции в сеть
+const SNAKE_ONLINE_INTERP_TIME = 0.22;    // чуть больше интервала публикации — запас на сетевые задержки/джиттер
 
 const SNAKE_BOT_PRESETS = {
-  easy:   { count: 5,  speed: 0.95, turnRate: 2.2, aggression: 0.05, sight: 240 },
-  medium: { count: 9,  speed: 1.10, turnRate: 2.8, aggression: 0.30, sight: 320 },
-  hard:   { count: 13, speed: 1.25, turnRate: 3.3, aggression: 0.65, sight: 420 },
-  online: { count: 6,  speed: 1.05, turnRate: 2.6, aggression: 0.25, sight: 300 }
+  easy:   { count: 10, speed: 0.95, turnRate: 2.2, aggression: 0.05, sight: 240 },
+  medium: { count: 16, speed: 1.10, turnRate: 2.8, aggression: 0.30, sight: 320 },
+  hard:   { count: 22, speed: 1.25, turnRate: 3.3, aggression: 0.65, sight: 420 },
+  online: { count: 10, speed: 1.05, turnRate: 2.6, aggression: 0.25, sight: 300 }
 };
 
 const SNAKE_BOT_NAMES = [
@@ -77,6 +79,11 @@ const SNAKE_BOT_NAMES = [
 function snakeDist(x1,y1,x2,y2){ const dx=x2-x1, dy=y2-y1; return Math.sqrt(dx*dx+dy*dy); }
 function snakeClamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function snakeNormAngle(a){ a = (a + Math.PI) % (Math.PI*2); if(a < 0) a += Math.PI*2; return a - Math.PI; }
+function snakeHashSeed(seed){
+  let h = 0; const str = String(seed || 'x');
+  for(let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h;
+}
 
 const Snake = {
   playerId: null,
@@ -98,6 +105,7 @@ const Snake = {
   roomId: null,
   peers: {},
   _unsubOnlinePlayers: null,
+  _unsubRoomsList: null,
 
   init(){
     this.playerId = getPlayerId();
@@ -293,9 +301,21 @@ const Snake = {
      ЦВЕТА / ИМЕНА
   ========================================================= */
   colorFor(seed){
-    let h = 0; const str = String(seed || 'x');
-    for(let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    const h = snakeHashSeed(seed);
     return `hsl(${h % 360},72%,56%)`;
+  },
+  // палитра из 3 оттенков для одной змейки — раньше всё тело красилось
+  // одним сплошным цветом (s.color), теперь вдоль тела рисуется плавный
+  // переход между несколькими оттенками одного и того же случайного
+  // "сида" (те же ID/имя, что и раньше), поэтому змейки выглядят
+  // разноцветными, а не однотонными, и при этом каждая по-прежнему
+  // стабильно узнаётся по своей гамме между кадрами/перезаходами.
+  paletteFor(seed){
+    const h = snakeHashSeed(seed);
+    const h1 = h % 360;
+    const h2 = (h1 + 46 + (h % 37)) % 360;
+    const h3 = (h1 + 190 + (h % 53)) % 360;
+    return [`hsl(${h1},78%,58%)`, `hsl(${h2},82%,66%)`, `hsl(${h3},72%,48%)`];
   },
   genRoomCode(){
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -316,6 +336,7 @@ const Snake = {
       x, y, angle, targetAngle: angle,
       len: SNAKE_BASE_LEN, score: 0, alive: true,
       trail: [{ x, y }],
+      maxSpanEver: SNAKE_BASE_LEN + 60,
       color: this.colorFor(id || name),
       boosting: false, respawnIn: 0,
       turnRate: isBot ? preset.turnRate : SNAKE_TURN_RATE,
@@ -328,6 +349,40 @@ const Snake = {
   },
   collisionRadius(s){
     return snakeClamp(9 + (s.len || SNAKE_BASE_LEN) * 0.006, 9, 26);
+  },
+  // возвращает только ту часть следа, которая соответствует текущей
+  // (актуальной) длине змейки — в отличие от s.trail, который теперь
+  // хранит НЕМНОГО больше истории про запас (см. комментарий в
+  // stepSnake про maxSpanEver), чтобы отрастание после ускорения было
+  // мгновенным. Используется и при отрисовке, и при проверке столкновений,
+  // чтобы видимая длина и "физическая" (по которой бьют столкновения)
+  // всегда совпадали.
+  visibleSpanTrail(s){
+    const trail = s.trail;
+    if(!trail || trail.length < 2) return trail || [];
+    const want = (s.len || SNAKE_BASE_LEN) + 60;
+    let acc = 0;
+    for(let i = 1; i < trail.length; i++){
+      acc += snakeDist(trail[i - 1].x, trail[i - 1].y, trail[i].x, trail[i].y);
+      if(acc > want) return trail.slice(0, i + 1);
+    }
+    return trail;
+  },
+  // проверка "точка (голова) задела чьё-то тело (след)" — раньше в
+  // разных местах след проверялся только по первым 150–260 точкам
+  // "для скорости", из-за чего у длинных змей дальний хвост вообще не
+  // участвовал в столкновениях, и голова игрока могла беспрепятственно
+  // "проходить сквозь" эту невидимо-неуязвимую часть чужого хвоста.
+  // Теперь проверяется ВЕСЬ след целиком, но с шагом (stride), который
+  // растёт вместе с длиной — так покрытие всегда полное, а количество
+  // проверок за кадр остаётся ограниченным (не более ~200 на тело).
+  bodyHit(px, py, trail, radius){
+    if(!trail || !trail.length) return false;
+    const stride = Math.max(1, Math.floor(trail.length / 200));
+    for(let i = 0; i < trail.length; i += stride){
+      if(snakeDist(px, py, trail[i].x, trail[i].y) < radius) return true;
+    }
+    return false;
   },
 
   /* =========================================================
@@ -388,6 +443,8 @@ const Snake = {
     if(countEl) countEl.textContent = '1';
     const statusEl = document.getElementById('snakeOnlineStatusText');
     const spinner = document.getElementById('snakeOnlineSpinner');
+    const joinErr = document.getElementById('snakeOnlineJoinError');
+    if(joinErr) snakeHide(joinErr);
     if(!window.DB){
       if(statusEl) statusEl.textContent = 'Онлайн работает только с настроенным облаком (см. документацию администратора) — пока можно поиграть только против ботов.';
       if(spinner) snakeHide(spinner);
@@ -395,17 +452,74 @@ const Snake = {
     }
     if(statusEl) statusEl.textContent = 'Ищем свободную комнату…';
     if(spinner) snakeShow(spinner);
+    this.watchOpenRooms();
     this.matchmake();
+  },
+  // список открытых комнат — обновляется, пока открыта модалка поиска,
+  // чтобы было видно, кто прямо сейчас ищет игру (можно зайти к
+  // конкретному игроку, а не только в случайно подобранную комнату)
+  watchOpenRooms(){
+    if(this._unsubRoomsList || !window.DB) return;
+    this._unsubRoomsList = DB.watchCollection('snakeRooms', list=> this.renderOpenRoomsList(list));
+  },
+  stopWatchingOpenRooms(){
+    if(this._unsubRoomsList){ this._unsubRoomsList(); this._unsubRoomsList = null; }
+  },
+  renderOpenRoomsList(list){
+    const el = document.getElementById('snakeOnlineRoomsList');
+    if(!el) return;
+    const now = Date.now();
+    const rooms = (list || [])
+      .filter(r=> r.status === 'open' && (r.playersCount || 0) < SNAKE_ONLINE_MAX_PLAYERS && now - (r.createdTs || 0) < 10 * 60 * 1000)
+      .sort((a,b)=> (b.createdTs||0) - (a.createdTs||0));
+    if(!rooms.length){
+      el.innerHTML = '<p class="news-empty">Пока никто не ищет — можешь стать первым!</p>';
+      return;
+    }
+    el.innerHTML = rooms.map(r=>{
+      const mine = r.id === this.roomId ? ' (ты здесь)' : '';
+      return `<li style="display:flex; align-items:center; justify-content:space-between; gap:8px; list-style:none; padding:6px 0;">
+        <span>🔑 <b>${escapeHtmlS(r.id)}</b>${mine} <span style="color:#8a6a45;">· игроков: ${r.playersCount || 0}</span></span>
+        <button class="btn btn-secondary btn-small" data-join-room="${escapeHtmlS(r.id)}" ${r.id === this.roomId ? 'disabled' : ''}>Войти</button>
+      </li>`;
+    }).join('');
+    el.querySelectorAll('[data-join-room]').forEach(btn=>{
+      btn.addEventListener('click', ()=> this.joinSpecificRoom(btn.dataset.joinRoom));
+    });
+  },
+  joinSpecificRoom(code){
+    if(!code || code === this.roomId) return;
+    this.leaveOnlineRoom(true);
+    this.registerInRoom(code);
+  },
+  // пытаемся придумать код комнаты, которого ещё точно нет в базе —
+  // раньше код генерировался случайно и сразу записывался БЕЗ проверки,
+  // из-за чего при неудачном совпадении (или при плохо посеянном ГПСЧ на
+  // некоторых устройствах) два разных человека могли получить одну и ту
+  // же комнату. Теперь перед созданием всегда проверяем, что код свободен.
+  async genUniqueRoomCode(){
+    for(let attempt = 0; attempt < 8; attempt++){
+      const code = this.genRoomCode();
+      try{
+        const existing = await DB.getItemOnce('snakeRooms', code);
+        if(!existing) return code;
+      }catch(e){
+        return code; // не смогли проверить — лучше создать, чем зависнуть
+      }
+    }
+    // крайне маловероятный случай — 8 подряд совпадений; добавляем
+    // временную метку, чтобы гарантированно получить уникальный код
+    return this.genRoomCode() + (Date.now() % 1000);
   },
   matchmake(){
     if(!window.DB) return;
-    DB.listOnce('snakeRooms').then(rooms=>{
+    DB.listOnce('snakeRooms').then(async rooms=>{
       const now = Date.now();
       const open = (rooms || []).filter(r=> r.status === 'open' && (r.playersCount || 0) < SNAKE_ONLINE_MAX_PLAYERS && now - (r.createdTs || 0) < 10 * 60 * 1000);
       if(open.length){
         this.registerInRoom(open[Math.floor(Math.random() * open.length)].id);
       } else {
-        const code = this.genRoomCode();
+        const code = await this.genUniqueRoomCode();
         DB.addItemWithId('snakeRooms', code, { status: 'open', createdTs: Date.now(), playersCount: 0 });
         this.registerInRoom(code);
       }
@@ -416,12 +530,24 @@ const Snake = {
   },
   joinRoomByCode(){
     const input = document.getElementById('snakeOnlineJoinInput');
+    const errEl = document.getElementById('snakeOnlineJoinError');
     const code = (input && input.value || '').trim().toUpperCase();
+    if(errEl) snakeHide(errEl);
     if(!code || !window.DB) return;
-    this.leaveOnlineRoom(true); // выходим из авто-подобранной комнаты, если уже в ней
     DB.getItemOnce('snakeRooms', code).then(doc=>{
-      if(!doc) DB.addItemWithId('snakeRooms', code, { status: 'open', createdTs: Date.now(), playersCount: 0 });
+      // раньше, если комнаты с таким кодом не было, она молча создавалась
+      // заново — из-за этого опечатка в коде никогда не показывала
+      // ошибку, а просто отправляла игрока в новую пустую комнату.
+      // Теперь ищем ИМЕННО существующую комнату; если не нашли — прямо
+      // говорим об этом, ничего не создавая.
+      if(!doc){
+        if(errEl){ errEl.textContent = `Комната «${code}» не найдена — проверь код.`; snakeShow(errEl); }
+        return;
+      }
+      this.leaveOnlineRoom(true); // выходим из авто-подобранной комнаты, если уже в ней
       this.registerInRoom(code);
+    }).catch(()=>{
+      if(errEl){ errEl.textContent = 'Не удалось проверить код. Попробуй ещё раз.'; snakeShow(errEl); }
     });
   },
   registerInRoom(code){
@@ -459,21 +585,69 @@ const Snake = {
       if(doc.id === this.playerId) return;
       activeIds.add(doc.id);
       let peer = this.peers[doc.id];
+      const isNew = !peer;
       if(!peer){ peer = this.peers[doc.id] = { id: doc.id, trail: [] }; }
+      const prevX = isNew ? doc.x : peer.x, prevY = isNew ? doc.y : peer.y;
+      const prevAngle = isNew ? (doc.angle || 0) : peer.angle;
       Object.assign(peer, {
-        name: doc.name, x: doc.x, y: doc.y, angle: doc.angle || 0,
-        len: doc.len || SNAKE_BASE_LEN, score: doc.score || 0,
+        name: doc.name, len: doc.len || SNAKE_BASE_LEN, score: doc.score || 0,
         color: doc.color || this.colorFor(doc.id), alive: !!doc.alive
       });
-      peer.trail.unshift({ x: doc.x, y: doc.y });
-      if(peer.trail.length > 60) peer.trail.length = 60;
+      // не дёргаем позицию сразу на новое значение — вместо этого плавно
+      // подъезжаем к ней в updatePeersMotion() на каждом кадре. Раньше
+      // x/y/angle менялись только раз в ~150–300мс (когда приходило
+      // обновление по сети), и змейка соперника буквально "телепортировалась"
+      // между точками — отсюда и сильные рывки в онлайне.
+      peer._fromX = isNew ? doc.x : prevX;
+      peer._fromY = isNew ? doc.y : prevY;
+      peer._fromAngle = isNew ? (doc.angle || 0) : prevAngle;
+      peer._toX = doc.x;
+      peer._toY = doc.y;
+      peer._toAngle = doc.angle || 0;
+      peer._lerpT = 0;
+      if(isNew){
+        peer.x = doc.x; peer.y = doc.y; peer.angle = doc.angle || 0;
+        peer.trail = [{ x: doc.x, y: doc.y }];
+        peer.maxSpanEver = (doc.len || SNAKE_BASE_LEN) + 60;
+      }
     });
     Object.keys(this.peers).forEach(id=>{ if(!activeIds.has(id)) delete this.peers[id]; });
     const countEl = document.getElementById('snakeOnlineRoomCount');
     if(countEl) countEl.textContent = Math.max(1, countInRoom);
   },
+  // плавно "довозим" каждого онлайн-соперника от последней известной
+  // позиции к самой свежей полученной по сети, и на каждом кадре (а не
+  // только раз на сетевое обновление) добавляем точку в его след — это
+  // и убирает рывки, и чинит "зависающий" хвост.
+  updatePeersMotion(dt){
+    if(this.mode !== 'online') return;
+    Object.values(this.peers).forEach(peer=>{
+      if(peer._toX == null) return;
+      peer._lerpT = Math.min(1, (peer._lerpT || 0) + dt / SNAKE_ONLINE_INTERP_TIME);
+      const t = peer._lerpT;
+      peer.x = peer._fromX + (peer._toX - peer._fromX) * t;
+      peer.y = peer._fromY + (peer._toY - peer._fromY) * t;
+      let dAngle = snakeNormAngle(peer._toAngle - peer._fromAngle);
+      peer.angle = peer._fromAngle + dAngle * t;
+
+      const last = peer.trail[0];
+      if(!last || snakeDist(last.x, last.y, peer.x, peer.y) >= SNAKE_SEG_SPACING * 0.55){
+        peer.trail.unshift({ x: peer.x, y: peer.y });
+      }
+      const wantSpan = (peer.len || SNAKE_BASE_LEN) + 60;
+      peer.maxSpanEver = Math.max(peer.maxSpanEver || wantSpan, wantSpan);
+      const storageCap = peer.maxSpanEver + 200;
+      let acc = 0, cut = peer.trail.length;
+      for(let i = 1; i < peer.trail.length; i++){
+        acc += snakeDist(peer.trail[i - 1].x, peer.trail[i - 1].y, peer.trail[i].x, peer.trail[i].y);
+        if(acc > storageCap){ cut = i + 1; break; }
+      }
+      if(cut < peer.trail.length) peer.trail.length = cut;
+    });
+  },
   cancelOnlineSearch(){
     this.leaveOnlineRoom();
+    this.stopWatchingOpenRooms();
     snakeHide(document.getElementById('snakeOnlineModal'));
   },
   // покидаем комнату: убираем свою запись игрока и, если в комнате
@@ -503,6 +677,7 @@ const Snake = {
     if(!this.roomId){ return; }
     this.mode = 'online';
     this.difficulty = 'online';
+    this.stopWatchingOpenRooms();
     snakeHide(document.getElementById('snakeOnlineModal'));
     snakeHide(document.getElementById('snakeMenuScreen'));
     snakeShow(document.getElementById('snakeGameScreen'));
@@ -534,7 +709,7 @@ const Snake = {
   },
   updateOnlineSync(dt){
     this._onlineSyncAcc = (this._onlineSyncAcc || 0) + dt;
-    if(this._onlineSyncAcc < 0.15) return;
+    if(this._onlineSyncAcc < SNAKE_ONLINE_SYNC_INTERVAL) return;
     this._onlineSyncAcc = 0;
     if(!window.DB || !this.roomId) return;
     DB.setItem('snakeOnlinePlayers', this.playerId, {
@@ -596,7 +771,10 @@ const Snake = {
     this.checkCollisions();
     this.updateCamera();
 
-    if(this.mode === 'online') this.updateOnlineSync(dt);
+    if(this.mode === 'online'){
+      this.updatePeersMotion(dt);
+      this.updateOnlineSync(dt);
+    }
   },
 
   stepSnake(s, dt){
@@ -615,11 +793,24 @@ const Snake = {
     if(!last || snakeDist(last.x, last.y, s.x, s.y) >= SNAKE_SEG_SPACING * 0.55){
       s.trail.unshift({ x: s.x, y: s.y });
     }
-    const maxSpan = s.len + 60;
+    // Раньше хранилище следа обрезалось строго под ТЕКУЩУЮ длину
+    // (s.len+60), и эта история терялась безвозвратно. Из-за этого
+    // после ускорения (которое временно уменьшает len) змейка не могла
+    // сразу отрастить видимую длину обратно при поедании еды — новых
+    // точек следа ещё не накопилось, и хвост визуально "подвисал"/
+    // отставал, пока змейка не проедет заново нужное расстояние.
+    // Теперь храним историю по МАКСИМАЛЬНОЙ когда-либо достигнутой
+    // длине (maxSpanEver) — так временное уменьшение len при ускорении
+    // не выбрасывает нужные точки, и отрастание происходит мгновенно.
+    // Видимая (отображаемая и участвующая в столкновениях) часть следа
+    // при этом отдельно ограничивается текущей длиной — см. visibleSpanTrail().
+    const wantSpan = s.len + 60;
+    s.maxSpanEver = Math.max(s.maxSpanEver || wantSpan, wantSpan);
+    const storageCap = s.maxSpanEver + 200;
     let acc = 0, cut = s.trail.length;
     for(let i = 1; i < s.trail.length; i++){
       acc += snakeDist(s.trail[i - 1].x, s.trail[i - 1].y, s.trail[i].x, s.trail[i].y);
-      if(acc > maxSpan){ cut = i + 1; break; }
+      if(acc > storageCap){ cut = i + 1; break; }
     }
     if(cut < s.trail.length) s.trail.length = cut;
 
@@ -703,8 +894,12 @@ const Snake = {
     return { x: pt.x, y: pt.y, big: !!big, imgIdx: Math.floor(Math.random() * 6) };
   },
   spawnFoodBurst(s){
-    const count = snakeClamp(Math.floor((s.len || SNAKE_BASE_LEN) / 22), 3, 40);
-    const pts = s.trail.length ? s.trail : [{ x: s.x, y: s.y }];
+    // раньше выпадало не больше 40 частиц независимо от размера — для
+    // по-настоящему большой змейки это выглядело как "почти ничего не
+    // выпало". Теперь порог значительно выше и сильнее зависит от длины.
+    const count = snakeClamp(Math.floor((s.len || SNAKE_BASE_LEN) / 14), 4, 220);
+    const visible = this.visibleSpanTrail(s);
+    const pts = visible.length ? visible : [{ x: s.x, y: s.y }];
     for(let i = 0; i < count; i++){
       const p = pts[Math.floor(Math.random() * pts.length)];
       const big = Math.random() < 0.12;
@@ -757,17 +952,25 @@ const Snake = {
     // собственное тело, погибнуть можно только о границу мира,
     // ботов или другого игрока в онлайне.
 
-    // с ботами (в обе стороны — кто врезался, тот и погиб)
+    // видимый след (в точности соответствующий текущей длине) считаем
+    // один раз за кадр на тело — используется и ниже в двойном цикле
+    // "боты между собой", чтобы не пересчитывать его многократно
+    const playerTrail = this.visibleSpanTrail(p);
+    const playerTrailForBots = playerTrail.slice(skipHead);
+    const botTrails = new Map();
+    this.bots.forEach(b=>{ if(b.alive) botTrails.set(b, this.visibleSpanTrail(b)); });
+
+    // с ботами (в обе стороны — кто врезался, тот и погиб). Проверяем
+    // ВЕСЬ след целиком (см. bodyHit) — раньше проверялись только первые
+    // 260 точек следа, и у достаточно длинного бота дальний хвост
+    // становился "неосязаемым": игрок мог столкнуться с ним и пройти
+    // насквозь, будто бота там не было.
     for(const b of this.bots){
       if(!b.alive) continue;
       const rb = this.collisionRadius(b);
-      for(let i = 0; i < Math.min(b.trail.length, 260); i++){
-        if(snakeDist(p.x, p.y, b.trail[i].x, b.trail[i].y) < rb){ this.killSnake(p, 'enemy'); return; }
-      }
+      if(this.bodyHit(p.x, p.y, botTrails.get(b), rb)){ this.killSnake(p, 'enemy'); return; }
       const rp = this.collisionRadius(p);
-      for(let i = skipHead; i < Math.min(p.trail.length, 260); i++){
-        if(snakeDist(b.x, b.y, p.trail[i].x, p.trail[i].y) < rp){ this.killSnake(b, 'enemy'); break; }
-      }
+      if(this.bodyHit(b.x, b.y, playerTrailForBots, rp)){ this.killSnake(b, 'enemy'); }
     }
     // боты между собой (упрощённо — только голова о чужое тело)
     for(let i = 0; i < this.bots.length; i++){
@@ -777,12 +980,7 @@ const Snake = {
         if(i === j) continue;
         const bb = this.bots[j];
         if(!bb.alive) continue;
-        const rb = this.collisionRadius(bb);
-        let hit = false;
-        for(let k = 0; k < Math.min(bb.trail.length, 150); k += 3){
-          if(snakeDist(a.x, a.y, bb.trail[k].x, bb.trail[k].y) < rb){ hit = true; break; }
-        }
-        if(hit){ this.killSnake(a, 'enemy'); break; }
+        if(this.bodyHit(a.x, a.y, botTrails.get(bb), this.collisionRadius(bb))){ this.killSnake(a, 'enemy'); break; }
       }
     }
     // с онлайн-соперниками (приближённо: только игрок может погибнуть —
@@ -792,10 +990,9 @@ const Snake = {
         const peer = this.peers[id];
         if(!peer.alive) continue;
         const rp = this.collisionRadius(peer);
-        const pts = peer.trail && peer.trail.length ? peer.trail : [{ x: peer.x, y: peer.y }];
-        for(const pt of pts){
-          if(snakeDist(p.x, p.y, pt.x, pt.y) < rp){ this.killSnake(p, 'enemy'); return; }
-        }
+        const pts = this.visibleSpanTrail(peer);
+        const trail = pts.length ? pts : [{ x: peer.x, y: peer.y }];
+        if(this.bodyHit(p.x, p.y, trail, rp)){ this.killSnake(p, 'enemy'); return; }
       }
     }
   },
@@ -901,7 +1098,8 @@ const Snake = {
   },
 
   drawSnakeBody(ctx, s){
-    const pts = [{ x: s.x, y: s.y }].concat(s.trail || []);
+    const visible = this.visibleSpanTrail(s);
+    const pts = [{ x: s.x, y: s.y }].concat(visible || []);
     const r = this.collisionRadius(s);
     if(pts.length < 2) pts.push({ x: s.x - Math.cos(s.angle) * 4, y: s.y - Math.sin(s.angle) * 4 });
 
@@ -914,7 +1112,23 @@ const Snake = {
     ctx.lineWidth = r * 2 + 3;
     ctx.stroke(path);
 
-    ctx.strokeStyle = s.color || '#F2B705';
+    // разноцветное тело: плавный градиент из 3 оттенков вдоль всей
+    // длины тела (от головы к кончику хвоста) вместо одной сплошной
+    // заливки — палитра стабильна для каждой змейки (тот же "сид",
+    // что и раньше у s.color), поэтому её легко узнать между кадрами
+    const tail = pts[pts.length - 1];
+    const palette = this.paletteFor(s.id || s.name);
+    let fillStyle;
+    if(Math.abs(tail.x - pts[0].x) < 0.5 && Math.abs(tail.y - pts[0].y) < 0.5){
+      fillStyle = palette[0];
+    } else {
+      const grad = ctx.createLinearGradient(pts[0].x, pts[0].y, tail.x, tail.y);
+      grad.addColorStop(0, palette[0]);
+      grad.addColorStop(0.5, palette[1]);
+      grad.addColorStop(1, palette[2]);
+      fillStyle = grad;
+    }
+    ctx.strokeStyle = fillStyle;
     ctx.lineWidth = r * 2;
     ctx.stroke(path);
 
@@ -1085,19 +1299,48 @@ const Snake = {
         if(Math.abs(dx) > 4 || Math.abs(dy) > 4) this.desiredAngle = Math.atan2(dy, dx);
       };
 
-      // ПК — мышка задаёт направление, ЛКМ — ускорение
+      // ПК — мышка задаёт направление от центра экрана, ЛКМ — ускорение
       canvas.addEventListener('mousemove', e=> setAngleFromClient(e.clientX, e.clientY));
       canvas.addEventListener('mousedown', e=>{ if(e.button === 0) this.inputBoost = true; });
       window.addEventListener('mouseup', ()=>{ this.inputBoost = false; });
 
-      // телефон — веди пальцем по полю, направление куда указывает палец
+      // телефон — невидимый "джойстик": палец сам становится центром
+      // управления там, где коснулся поля (а не привязан к центру
+      // экрана), поэтому направление можно полностью менять на месте,
+      // без необходимости тянуть палец через всё поле. Пока палец не
+      // сдвинулся дальше маленькой мёртвой зоны — направление не
+      // меняется (чтобы случайные дрожания при тапе не сбивали курс).
+      const JOY_DEADZONE = 10;
+      let joyOriginX = 0, joyOriginY = 0, joyActive = false;
+
       canvas.addEventListener('touchstart', e=>{
-        if(e.touches[0]) setAngleFromClient(e.touches[0].clientX, e.touches[0].clientY);
+        const t = e.touches[0];
+        if(!t) return;
+        joyOriginX = t.clientX; joyOriginY = t.clientY;
+        joyActive = true;
       }, { passive: true });
+
       canvas.addEventListener('touchmove', e=>{
         e.preventDefault();
-        if(e.touches[0]) setAngleFromClient(e.touches[0].clientX, e.touches[0].clientY);
+        const t = e.touches[0];
+        if(!joyActive || !t) return;
+        const dx = t.clientX - joyOriginX, dy = t.clientY - joyOriginY;
+        const dist = Math.hypot(dx, dy);
+        if(dist < JOY_DEADZONE) return;
+        this.desiredAngle = Math.atan2(dy, dx);
+        // сдвигаем "центр джойстика" к точке чуть позади пальца по
+        // направлению движения — так, если палец продолжает ехать в
+        // одну сторону, зона нечувствительности не мешает вести змейку
+        // дальше, а лёгкое изменение направления пальца тут же
+        // поворачивает змейку, не требуя оторвать палец и коснуться заново
+        const keep = JOY_DEADZONE / dist;
+        joyOriginX = t.clientX - dx * keep;
+        joyOriginY = t.clientY - dy * keep;
       }, { passive: false });
+
+      const endJoystick = ()=>{ joyActive = false; };
+      canvas.addEventListener('touchend', endJoystick);
+      canvas.addEventListener('touchcancel', endJoystick);
     }
 
     // отдельная кнопка ускорения слева снизу — для телефона
