@@ -36,6 +36,7 @@ function escapeHtmlT(str){
 }
 function tttShow(el){ if(el) el.classList.remove('hidden'); }
 function tttHide(el){ if(el) el.classList.add('hidden'); }
+function tttShowEl(el, show){ if(el) el.classList.toggle('hidden', !show); }
 
 // Основной путь — латиница в нижнем регистре. GitHub Pages (как и
 // большинство хостингов) раздаёт файлы с учётом регистра, поэтому если
@@ -425,6 +426,8 @@ const TicTacToe = {
   },
   renderModePill(){
     const pill = document.getElementById('tttModePill');
+    const pingPill = document.getElementById('tttPingPill');
+    if(pingPill) tttShowEl(pingPill, this.mode === 'online');
     if(!pill) return;
     if(this.mode === 'bot'){
       pill.textContent = TTT_DIFF_LABEL[this.botDifficulty] || '🤖 Бот';
@@ -738,8 +741,27 @@ const TicTacToe = {
 
     this._unsubActiveGame = DB.watchItem('tttGames', gameId, doc=> this.renderOnlineGame(doc, gameId));
     this.startMoveTimer();
+    this.startPingTimer();
     tttHide(document.getElementById('tttMenuScreen'));
     tttShow(document.getElementById('tttGameScreen'));
+  },
+  // пинг до базы обновляется раз в 4 секунды, пока идёт онлайн-партия —
+  // сразу видно, если у кого-то плохое соединение (это часто объясняет
+  // "тормознутость" в онлайн-режимах)
+  startPingTimer(){
+    this.stopPingTimer();
+    const tick = ()=>{
+      if(!window.DB || !this.onlineGameId) return;
+      DB.measurePing(this.playerId).then(ms=>{
+        const el = document.getElementById('tttPingValue');
+        if(el) el.textContent = (ms === null) ? '—' : ms + ' мс';
+      });
+    };
+    tick();
+    this._pingInterval = setInterval(tick, 4000);
+  },
+  stopPingTimer(){
+    if(this._pingInterval){ clearInterval(this._pingInterval); this._pingInterval = null; }
   },
   renderOnlineGame(doc, gameId){
     if(!doc){
@@ -936,6 +958,7 @@ const TicTacToe = {
     }
     this.onlineGameId = null;
     this.stopMoveTimer();
+    this.stopPingTimer();
   },
   // best-effort попытка засчитать поражение, если вкладку закрыли
   // прямо посреди онлайн-партии

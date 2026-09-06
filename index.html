@@ -283,12 +283,42 @@
       </div>
 
       <div class="menu-buttons" style="margin-top:16px;">
+        <button class="btn btn-secondary" id="snakeSkinBtn">🎨 Скин змейки</button>
         <button class="btn btn-secondary" id="snakeRecordsBtn">🏆 Рекорды</button>
         <button class="btn btn-secondary" id="snakeProfileBtn">🏅 Профиль и достижения</button>
       </div>
       <p class="hint">На телефоне — веди пальцем по полю и жми кнопку ускорения слева снизу. На компьютере — веди мышкой, ЛКМ — ускорение.</p>
     </div>
   </section>
+
+  <!-- МОДАЛКА: ВЫБОР СКИНА ЗМЕЙКИ -->
+  <div class="modal hidden" id="snakeSkinModal">
+    <div class="modal-card" style="text-align:center; max-width:480px;">
+      <button class="modal-close" id="snakeSkinCloseBtn">✖</button>
+      <h2>🎨 Скин змейки</h2>
+      <div class="skin-tabs">
+        <button class="skin-tab active" id="snakeSkinTabColors" data-tab="colors">Цвета</button>
+        <button class="skin-tab" id="snakeSkinTabImages" data-tab="images">Лучшие</button>
+      </div>
+
+      <div id="snakeSkinPaneColors" class="skin-pane">
+        <div class="skin-grid" id="snakeSkinColorGrid"></div>
+        <div id="snakeCustomSkinEditor" class="skin-custom-editor hidden">
+          <p class="modal-note">Выбери до 3 цветов своей змейки:</p>
+          <div class="skin-custom-colors" id="snakeCustomColorInputs"></div>
+          <div class="menu-buttons" style="margin-top:10px;">
+            <button class="btn btn-secondary btn-small" id="snakeCustomColorAddBtn">+ Добавить цвет</button>
+            <button class="btn btn-primary btn-small" id="snakeCustomColorSaveBtn">Сохранить и выбрать</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="snakeSkinPaneImages" class="skin-pane hidden">
+        <div class="skin-grid" id="snakeSkinImageGrid"></div>
+        <p class="news-empty" id="snakeSkinImageEmpty">Пока нет ни одного скина — загляни позже.</p>
+      </div>
+    </div>
+  </div>
 
   <!-- МОДАЛКА: ПОИСК/СОЗДАНИЕ ОНЛАЙН-КОМНАТЫ ЗМЕЙКИ -->
   <div class="modal hidden" id="snakeOnlineModal">
@@ -328,6 +358,7 @@
       <div class="snake-io-center" id="snakeCenterHud">
         <div class="snake-io-diff" id="snakeDiffPill">🥄 Лёгкий</div>
         <div class="snake-io-score" id="snakeScoreValue">0</div>
+        <div class="snake-io-diff hidden" id="snakePingPill" style="margin-top:4px;">📶 <span id="snakePingValue">—</span></div>
       </div>
 
       <div class="snake-io-leaderboard" id="snakeLeaderboard">
@@ -467,6 +498,7 @@
       <div class="score-pill" id="tttModePill">🤖 Бот</div>
       <div class="score-pill" id="tttTurnPill">Ход: ❌</div>
       <div class="score-pill hidden" id="tttTimerPill">⏱ 30 с</div>
+      <div class="score-pill hidden" id="tttPingPill">📶 <span id="tttPingValue">—</span></div>
       <button class="btn btn-small btn-danger" id="tttExitBtn">✖ Выход</button>
     </div>
     <div class="ttt-players-row" id="tttPlayersRow">

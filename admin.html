@@ -39,6 +39,9 @@
   .cfg-form textarea{ min-height:60px; resize:vertical; }
   .cfg-form .cfg-check{ flex-direction:row; align-items:center; gap:6px; }
   .cfg-form-actions{ grid-column: 1 / -1; display:flex; gap:8px; margin-top:4px; }
+  .cfg-image-preview{ margin-top:6px; }
+  .cfg-image-preview img{ max-width:80px; max-height:80px; border-radius:8px; border:2px solid #EADFC8; }
+  .cfg-image-empty{ font-size:0.72rem; color:#a17a4d; font-weight:500; }
   .cfg-item-title{ font-family:'Baloo 2',sans-serif; font-weight:800; }
   .cfg-item-sub{ font-size:0.78rem; color:#8a6a45; margin-top:2px; }
   .save-btn{ background:#DFF3E1; color:#2C7A3D; }
@@ -99,6 +102,7 @@
       <button class="admin-tab" data-tab="snake">🟢 Змейка.io</button>
       <button class="admin-tab" data-tab="doodle">🧗 Doodle-прыжки</button>
       <button class="admin-tab" data-tab="ttt">❌⭕ Крестики-нолики</button>
+      <button class="admin-tab" data-tab="allPlayers">👥 Все игроки</button>
     </div>
 
     <!-- ===================== ВКЛАДКА: НОВОСТИ ===================== -->
@@ -262,6 +266,32 @@
         <button class="btn btn-primary btn-small" id="snakeAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
         <div id="snakeAchievementsList" style="margin-top:12px;"></div>
       </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🎨 Цветные скины (вкладка "Цвета" в игре)</h2></summary>
+        <p class="modal-note">Каждый скин открывается за выбранное достижение змейки (выше). Цвета — через запятую, например <code>#FFD84D,#3D6BFF</code>. Скины "Случайный" и "Свой" всегда идут первыми в игре и здесь не редактируются.</p>
+        <div id="snakeSkinsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="snakeSkinsAddBtn" style="margin-top:8px;">+ Добавить скин</button>
+        <div id="snakeSkinsList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🖼 Картиночные скины (вкладка "Лучшие" в игре)</h2></summary>
+        <p class="modal-note">Загружаются 2 картинки: голова и один кусочек туловища (тело "строится" из повторов этой картинки вдоль змейки, как в примере). Достижение можно не указывать — тогда скин открыт всем сразу.</p>
+        <div id="snakeImageSkinsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="snakeImageSkinsAddBtn" style="margin-top:8px;">+ Добавить скин</button>
+        <div id="snakeImageSkinsList" style="margin-top:12px;"></div>
+      </details>
+    </div>
+
+    <!-- ===================== ВКЛАДКА: ВСЕ ИГРОКИ ===================== -->
+    <div class="admin-tab-panel hidden" data-panel="allPlayers">
+      <div class="admin-card">
+        <h2>👥 Все игроки сайта</h2>
+        <p class="modal-note">Список собран по игрокам всех игр сайта. Изменение никнейма здесь применяется сразу везде на сайте — в профиле, рекордах, списках онлайн-игроков и т.д. (кроме отдельного никнейма, который игрок может поставить внутри конкретной игры — он меняется только там).</p>
+        <input class="text-input" id="allPlayersSearch" placeholder="Поиск по никнейму…" style="margin-top:8px;">
+        <div id="allPlayersList" style="margin-top:12px;"></div>
+      </div>
     </div>
 
     <!-- ===================== ВКЛАДКА: DOODLE-ПРЫЖКИ ===================== -->

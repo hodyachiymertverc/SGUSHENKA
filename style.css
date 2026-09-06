@@ -345,6 +345,32 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 .ach-desc{ font-size:0.72rem; color:#8a6a45; margin-top:2px; overflow-wrap:break-word; }
 
 .profile-level-block{ display:flex; align-items:center; gap:14px; margin-top:8px; }
+
+/* ---- Выбор скина змейки ---- */
+.skin-tabs{ display:flex; gap:8px; margin-top:14px; justify-content:center; }
+.skin-tab{
+  flex:1; max-width:160px; padding:10px 12px; border-radius:12px; border:2px solid #EADFC8;
+  background: var(--cream); font-family:'Baloo 2',sans-serif; font-weight:700; font-size:0.9rem;
+  color:#8a6a45; cursor:pointer;
+}
+.skin-tab.active{ background: var(--white); border-color: var(--gold); color: var(--caramel-dark); }
+.skin-pane{ margin-top:14px; text-align:left; max-height:52vh; overflow-y:auto; }
+.skin-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(110px,1fr)); gap:10px; }
+.skin-card{
+  background: var(--white); border-radius:16px; padding:10px 8px; text-align:center;
+  border: 2px solid #EADFC8; cursor:pointer; position:relative;
+}
+.skin-card.selected{ border-color: var(--pink); background: linear-gradient(180deg,#FFF0F5,var(--white)); }
+.skin-card.locked{ opacity:0.55; cursor:not-allowed; }
+.skin-swatch{ height:34px; border-radius:10px; display:flex; overflow:hidden; border:1px solid rgba(0,0,0,0.1); }
+.skin-swatch span{ flex:1; }
+.skin-thumb{ height:56px; display:flex; align-items:center; justify-content:center; }
+.skin-thumb img{ max-height:100%; max-width:100%; }
+.skin-name{ font-family:'Baloo 2',sans-serif; font-weight:700; font-size:0.78rem; margin-top:6px; overflow-wrap:break-word; }
+.skin-lock-note{ font-size:0.68rem; color:#a17a4d; margin-top:2px; }
+.skin-custom-editor{ margin-top:14px; padding:12px; background:var(--cream); border-radius:14px; }
+.skin-custom-colors{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:8px; }
+.skin-custom-colors input[type="color"]{ width:44px; height:44px; border-radius:10px; border:2px solid #EADFC8; padding:0; cursor:pointer; }
 .profile-level-emoji{ font-size:2.6rem; background:var(--cream); border-radius:50%; width:64px; height:64px; display:flex; align-items:center; justify-content:center; border:3px solid var(--gold); flex-shrink:0; }
 .profile-level-name{ font-family:'Baloo 2',sans-serif; font-weight:800; font-size:1.15rem; color:var(--caramel-dark); }
 .profile-points-note{ font-size:0.85rem; color:#8a6a45; font-weight:700; margin-top:2px; }

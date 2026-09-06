@@ -378,16 +378,64 @@ function fieldHTML(f, prefix, values){
   if(f.type === 'number'){
     return `<label class="cfg-field">${escapeHtml(f.label)}<input type="number" id="${id}" value="${val}" step="${f.step || 1}"></label>`;
   }
+  if(f.type === 'colorlist'){
+    // список цветов скина — просто через запятую (например "#FFD84D,#3D6BFF"),
+    // чтобы не городить в общей форме отдельный виджет из N цветовых пикеров
+    const strVal = Array.isArray(val) ? val.join(',') : (val || '');
+    return `<label class="cfg-field wide">${escapeHtml(f.label)}<input type="text" id="${id}" value="${escapeHtml(strVal)}" placeholder="#FFD84D,#3D6BFF,#FF4D4D"></label>`;
+  }
+  if(f.type === 'image'){
+    // картинка загружается прямо из файла на компьютере админа и
+    // хранится как data-URL (base64) — отдельного сервера для загрузки
+    // файлов у сайта нет, а таким образом картинка сразу попадает в базу
+    // вместе с остальными полями скина
+    const previewSrc = val || '';
+    return `<label class="cfg-field wide">${escapeHtml(f.label)}
+      <input type="hidden" id="${id}_data" value="${escapeHtml(previewSrc)}">
+      <input type="file" accept="image/*" id="${id}">
+      <div class="cfg-image-preview" data-preview-for="${id}">${previewSrc ? `<img src="${previewSrc}" alt="">` : '<span class="cfg-image-empty">нет картинки</span>'}</div>
+    </label>`;
+  }
   return `<label class="cfg-field ${f.wide ? 'wide' : ''}">${escapeHtml(f.label)}<input type="text" id="${id}" value="${escapeHtml(val)}"></label>`;
+}
+
+// вешает обработчик на файловые поля (type:'image') сразу после того,
+// как их HTML вставлен в DOM — сама fieldHTML() отдаёт только строку
+// разметки и не может сама навесить слушатель события
+function wireImageFields(container, fields, prefix){
+  fields.forEach(f=>{
+    if(f.type !== 'image') return;
+    const id = prefix + '_' + f.key;
+    const fileInput = container.querySelector('#' + id);
+    const hiddenInput = container.querySelector('#' + id + '_data');
+    const preview = container.querySelector(`[data-preview-for="${id}"]`);
+    if(!fileInput || !hiddenInput) return;
+    fileInput.addEventListener('change', ()=>{
+      const file = fileInput.files && fileInput.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        hiddenInput.value = reader.result;
+        if(preview) preview.innerHTML = `<img src="${reader.result}" alt="">`;
+      };
+      reader.readAsDataURL(file);
+    });
+  });
 }
 
 function readFields(fields, prefix){
   const out = {};
   fields.forEach(f=>{
+    if(f.type === 'image'){
+      const hidden = document.getElementById(prefix + '_' + f.key + '_data');
+      out[f.key] = hidden ? hidden.value : '';
+      return;
+    }
     const el = document.getElementById(prefix + '_' + f.key);
     if(!el) return;
     if(f.type === 'checkbox') out[f.key] = el.checked;
     else if(f.type === 'number') out[f.key] = parseFloat(el.value) || 0;
+    else if(f.type === 'colorlist') out[f.key] = el.value.split(',').map(s=> s.trim()).filter(Boolean);
     else out[f.key] = el.value;
   });
   return out;
@@ -408,6 +456,7 @@ function mountConfigSection(opts){
            <button class="btn btn-primary btn-small" id="${opts.collection}_saveAdd" type="button">Сохранить</button>
            <button class="btn btn-secondary btn-small" id="${opts.collection}_cancelAdd" type="button">Отмена</button>
          </div>`;
+    wireImageFields(addFormEl, opts.fields, 'add_' + opts.collection);
     document.getElementById(opts.collection + '_saveAdd').addEventListener('click', ()=>{
       const values = readFields(opts.fields, 'add_' + opts.collection);
       DB.addItem(opts.collection, values);
@@ -484,6 +533,7 @@ function renderConfigList(listEl, list, opts, editingId, setEditingId){
              <button class="mini-btn save-btn" type="button" data-savebtn="1">💾 Сохранить</button>
            </div>`;
       formEl.classList.remove('hidden');
+      wireImageFields(formEl, opts.fields, prefix);
       formEl.querySelector('[data-savebtn]').addEventListener('click', ()=>{
         const values = readFields(opts.fields, prefix);
         DB.setItem(opts.collection, item.id, values);
@@ -621,6 +671,7 @@ function mountAllConfigSections(){
   });
 
   mountClickerPlayers();
+  mountAllPlayers();
 
   /* ---- уровни змейки ---- */
   mountConfigSection({
@@ -655,7 +706,43 @@ function mountAllConfigSections(){
       { key:'target', label:'Нужное значение', type:'number', default:1 }
     ],
     summary(item){
-      return { title: `${item.emoji || ''} ${item.title || ''}`, sub: `${item.desc || ''} · условие: ${item.target} (${snakeAchTypeLabels[item.type] || item.type})` };
+      return { title: `${item.emoji || ''} ${item.title || ''} (id: ${item.id})`, sub: `${item.desc || ''} · условие: ${item.target} (${snakeAchTypeLabels[item.type] || item.type})` };
+    }
+  });
+
+  /* ---- цветные скины змейки ---- */
+  mountConfigSection({
+    collection: 'snakeSkins',
+    addFormElId: 'snakeSkinsAddForm', addBtnId: 'snakeSkinsAddBtn', listElId: 'snakeSkinsList',
+    seed: (window.DEFAULTS && DEFAULTS.snakeSkins) || [],
+    emptyText: 'Пока нет цветных скинов.',
+    fields: [
+      { key:'name', label:'Название', type:'text', default:'' },
+      { key:'colors', label:'Цвета (через запятую)', type:'colorlist', default:['#3DDC5A','#2A8A45'] },
+      { key:'achievementId', label:'ID нужного достижения (см. список выше, например sach3)', type:'text', default:'' },
+      { key:'order', label:'Порядок в списке', type:'number', default:1 }
+    ],
+    summary(item){
+      const sw = (item.colors || []).join(', ');
+      return { title: item.name || 'Скин', sub: `Цвета: ${sw || '—'} · достижение: ${item.achievementId || 'нет (открыт всем)'}` };
+    }
+  });
+
+  /* ---- картиночные скины змейки ---- */
+  mountConfigSection({
+    collection: 'snakeImageSkins',
+    addFormElId: 'snakeImageSkinsAddForm', addBtnId: 'snakeImageSkinsAddBtn', listElId: 'snakeImageSkinsList',
+    seed: (window.DEFAULTS && DEFAULTS.snakeImageSkins) || [],
+    emptyText: 'Пока нет картиночных скинов.',
+    fields: [
+      { key:'name', label:'Название', type:'text', default:'' },
+      { key:'headImg', label:'Картинка головы', type:'image', default:'' },
+      { key:'bodyImg', label:'Картинка кусочка туловища', type:'image', default:'' },
+      { key:'achievementId', label:'ID нужного достижения, необязательно (см. список выше)', type:'text', default:'' },
+      { key:'order', label:'Порядок в списке', type:'number', default:1 }
+    ],
+    summary(item){
+      return { title: item.name || 'Скин', sub: `достижение: ${item.achievementId || 'нет (открыт всем)'}` };
     }
   });
 
@@ -1037,6 +1124,113 @@ function mountClickerPlayers(){
 }
 
 /* =========================================================
+   ВСЕ ИГРОКИ САЙТА — глобальное изменение никнейма
+========================================================= */
+// ВАЖНО: ник на сайте хранится в localStorage самого игрока (единого
+// "аккаунта" с паролем на сайте нет), поэтому изменение здесь работает
+// так: (1) сразу переписывается ник во всех игровых коллекциях, где он
+// уже встречался у этого id — это то, что видят ДРУГИЕ игроки (списки
+// онлайн, и т.п.); (2) в 'profiles/<id>' дополнительно ставится метка
+// nameSetByAdmin с текущим временем — специальный "живой" наблюдатель в
+// player.js подхватывает эту метку и переносит новый ник в localStorage
+// САМОГО игрока, пока тот на сайте (через постоянное соединение с
+// базой) — либо при следующем заходе, если он был офлайн.
+// Никнейм, который игрок меняет ВНУТРИ отдельной игры (если там есть
+// такая возможность), эту функцию не затрагивает и остаётся только в
+// этой игре — как и просили.
+function mountAllPlayers(){
+  const listEl = document.getElementById('allPlayersList');
+  const searchEl = document.getElementById('allPlayersSearch');
+  if(!listEl || !window.DB) return;
+
+  const sources = ['profiles', 'clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers'];
+  const latestByCollection = {};
+  let merged = {};
+
+  function rebuild(){
+    merged = {};
+    sources.forEach(col=>{
+      (latestByCollection[col] || []).forEach(item=>{
+        if(!item || !item.id) return;
+        if(!merged[item.id]) merged[item.id] = { id: item.id, name: '(без ника)', seenIn: [] };
+        if(item.name) merged[item.id].name = item.name;
+        merged[item.id].seenIn.push(col);
+      });
+    });
+    render();
+  }
+
+  function render(){
+    const q = ((searchEl && searchEl.value) || '').trim().toLowerCase();
+    const list = Object.values(merged)
+      .filter(p=> !q || (p.name || '').toLowerCase().includes(q))
+      .sort((a,b)=> (a.name || '').localeCompare(b.name || ''));
+    listEl.innerHTML = '';
+    if(!list.length){
+      listEl.innerHTML = '<p class="news-empty">Игроки не найдены.</p>';
+      return;
+    }
+    list.forEach(p=>{
+      const card = document.createElement('div');
+      card.className = 'admin-list-item';
+      card.innerHTML = `
+        <div class="row">
+          <div class="info">
+            <div class="cfg-item-title">${escapeHtml(p.name)}</div>
+            <div class="cfg-item-sub">id: ${escapeHtml(p.id)} · есть в: ${p.seenIn.join(', ')}</div>
+          </div>
+          <div class="actions">
+            <button class="mini-btn view-btn" data-edit="1">✏️ Изменить ник</button>
+          </div>
+        </div>
+        <div class="cfg-form hidden" data-editform="1"></div>
+      `;
+      listEl.appendChild(card);
+
+      const editBtn = card.querySelector('[data-edit]');
+      const formEl = card.querySelector('[data-editform]');
+      editBtn.addEventListener('click', ()=>{
+        if(!formEl.classList.contains('hidden')){
+          formEl.classList.add('hidden');
+          return;
+        }
+        formEl.innerHTML = `
+          <label class="cfg-field wide">Новый никнейм
+            <input type="text" id="allp_newname" maxlength="16" value="${escapeHtml(p.name)}">
+          </label>
+          <div class="cfg-form-actions">
+            <button class="mini-btn save-btn" type="button" data-savebtn="1">💾 Сохранить везде</button>
+          </div>`;
+        formEl.classList.remove('hidden');
+        formEl.querySelector('[data-savebtn]').addEventListener('click', ()=>{
+          const input = document.getElementById('allp_newname');
+          const newName = (input.value || '').trim().slice(0, 16);
+          if(!newName) return;
+          renamePlayerEverywhere(p.id, newName, p.seenIn);
+          formEl.classList.add('hidden');
+        });
+      });
+    });
+  }
+
+  sources.forEach(col=>{
+    DB.watchCollection(col, list=>{ latestByCollection[col] = list; rebuild(); });
+  });
+  if(searchEl) searchEl.addEventListener('input', render);
+}
+
+function renamePlayerEverywhere(id, newName, seenIn){
+  const ts = Date.now();
+  const cols = new Set(seenIn || []);
+  cols.add('profiles'); // всегда пишем сюда — отсюда игрок "живьём" подхватит новый ник
+  cols.forEach(col=>{
+    const patch = { name: newName };
+    if(col === 'profiles') patch.nameSetByAdmin = ts;
+    DB.setItem(col, id, patch);
+  });
+}
+
+/* =========================================================
    ВКЛАДКИ ПО ИГРАМ
 ========================================================= */
 function mountTabs(){
@@ -1144,7 +1338,8 @@ snakeRecordsMedium, snakeRecordsHard, snakeRecordsOnline, snakeRooms,
 snakeOnlinePlayers, snakeClassicLevels, snakeClassicAchievements,
 snakeClassicPlayers, snakeClassicRecordsEasy, snakeClassicRecordsHard,
 doodleLevels, doodleAchievements, doodlePlayers,
-doodleRecords — по аналогии с тем, как уже разрешены records и news).`;
+doodleRecords, snakeSkins, snakeImageSkins, tttGames, tttLobby,
+_ping — по аналогии с тем, как уже разрешены records и news).`;
   } else if(hintEl){
     hintEl.classList.add('hidden');
   }

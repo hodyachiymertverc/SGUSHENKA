@@ -207,6 +207,10 @@ function refreshNicknameBar(){
   if(nicknameDisplay) nicknameDisplay.textContent = getNickname();
 }
 refreshNicknameBar();
+// если админ поменял ник этому игроку прямо сейчас (см. player.js:
+// watchAdminNicknameOverride), сразу обновляем шапку сайта, не дожидаясь
+// перезагрузки страницы
+window.onNicknameChangedByAdmin = ()=> refreshNicknameBar();
 
 if(nicknameEditBtn){
   nicknameEditBtn.addEventListener('click', ()=>{

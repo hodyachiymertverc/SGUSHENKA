@@ -13,6 +13,7 @@ const LocalPrefs = {
 const KEYS = {
   nickname: 'gd_nickname',
   nicknameLocked: 'gd_nickname_locked',
+  nicknameAdminTs: 'gd_nickname_admin_ts',
   playerId: 'gd_player_id',
   sfx: 'gd_sfx_on',
   music: 'gd_music_on',
@@ -62,6 +63,33 @@ function getNickname(){
   }
   return nick;
 }
+
+/* ник на сайте хранится ЛОКАЛЬНО у игрока (единого аккаунта с паролем
+   нет), поэтому когда админ меняет ник игроку через админ-панель
+   (см. renamePlayerEverywhere в admin.js), это должно как-то дойти до
+   самого игрока. Админка ставит метку profiles/<id>.nameSetByAdmin —
+   а мы здесь постоянно "слушаем" этот профиль через живое соединение с
+   базой и, как только видим более свежую метку, чем последняя уже
+   применённая нами, переносим новый ник в localStorage и блокируем его
+   (как будто игрок сам его задал и подтвердил) — благодаря живому
+   соединению это происходит, пока игрок ещё на сайте, почти мгновенно;
+   если его не было на сайте в момент правки — применится при заходе. */
+function watchAdminNicknameOverride(){
+  if(!window.DB) return;
+  const id = getPlayerId();
+  DB.watchItem('profiles', id, doc=>{
+    if(!doc || !doc.nameSetByAdmin || !doc.name) return;
+    const appliedTs = LocalPrefs.get(KEYS.nicknameAdminTs, 0);
+    if(doc.nameSetByAdmin > appliedTs){
+      LocalPrefs.set(KEYS.nickname, doc.name);
+      LocalPrefs.set(KEYS.nicknameLocked, true);
+      LocalPrefs.set(KEYS.nicknameAdminTs, doc.nameSetByAdmin);
+      if(typeof window.onNicknameChangedByAdmin === 'function') window.onNicknameChangedByAdmin(doc.name);
+    }
+  });
+}
+if(document.readyState !== 'loading') watchAdminNicknameOverride();
+else document.addEventListener('DOMContentLoaded', watchAdminNicknameOverride);
 
 /* виден ли сейчас указанный экран (используется, чтобы всплывающие
    окна с достижениями/событиями показывались только в "своей" игре) */

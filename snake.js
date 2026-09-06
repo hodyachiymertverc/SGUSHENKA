@@ -26,6 +26,7 @@
 function escapeHtmlS(str){ const d = document.createElement('div'); d.textContent = str == null ? '' : str; return d.innerHTML; }
 function snakeShow(el){ if(el) el.classList.remove('hidden'); }
 function snakeHide(el){ if(el) el.classList.add('hidden'); }
+function snakeShowEl(el, show){ if(el) el.classList.toggle('hidden', !show); }
 
 /* ---------------- картинки частиц-еды ----------------
    Сейчас только сгущёнка. Чтобы добавить ещё картинки частиц —
@@ -118,6 +119,8 @@ const Snake = {
 
     DB.seedIfEmpty('snakeLevels', DEFAULTS.snakeLevels);
     DB.seedIfEmpty('snakeAchievements', DEFAULTS.snakeAchievements);
+    DB.seedIfEmpty('snakeSkins', DEFAULTS.snakeSkins);
+    DB.seedIfEmpty('snakeImageSkins', DEFAULTS.snakeImageSkins || []);
 
     DB.watchCollection('snakeLevels', list=>{
       this.levels = list.slice().sort((a,b)=> (a.min||0) - (b.min||0));
@@ -129,14 +132,23 @@ const Snake = {
       this.renderProfileUI();
       this.checkAchievements();
     });
+    DB.watchCollection('snakeSkins', list=>{
+      this.skins = list.slice().sort((a,b)=> (a.order||0) - (b.order||0));
+      this.renderSkinModal();
+    });
+    DB.watchCollection('snakeImageSkins', list=>{
+      this.imageSkins = list.slice().sort((a,b)=> (a.order||0) - (b.order||0));
+      this.renderSkinModal();
+    });
     DB.watchItem('snakePlayers', this.playerId, doc=>{
       this.data = Object.assign(
-        { totalCaught: 0, gamesPlayed: 0, bestEasy: 0, bestMedium: 0, bestHard: 0, bestOnline: 0, unlocked: {} },
+        { totalCaught: 0, gamesPlayed: 0, bestEasy: 0, bestMedium: 0, bestHard: 0, bestOnline: 0, unlocked: {}, selectedSkin: { type: 'random' }, customSkinColors: [] },
         doc || {}
       );
       this._ready = true;
       this.renderMenuUI();
       this.renderProfileUI();
+      this.renderSkinModal();
       this.checkAchievements();
     });
 
@@ -190,7 +202,171 @@ const Snake = {
     }
   },
 
-  /* ---------------- рекорды ---------------- */
+  /* ---------------- скины змейки ---------------- */
+  // скин с привязкой к достижению открыт, если это достижение уже
+  // разблокировано у игрока; скин без привязки (achievementId пуст) —
+  // открыт всем сразу
+  isSkinUnlocked(skin){
+    if(!skin || !skin.achievementId) return true;
+    return !!(this.data.unlocked && this.data.unlocked[skin.achievementId]);
+  },
+  // "свой" скин (кастомные цвета) открывается только когда ВСЕ обычные
+  // цветные скины уже разблокированы — как и попросили: он как бы венчает
+  // коллекцию, а не открывается наравне с остальными
+  allColorSkinsUnlocked(){
+    const list = this.skins || [];
+    if(!list.length) return false;
+    return list.every(sk=> this.isSkinUnlocked(sk));
+  },
+  openSkinModal(){
+    snakeShow(document.getElementById('snakeSkinModal'));
+    this.renderSkinModal();
+  },
+  renderSkinModal(){
+    if(!this._ready) return;
+    this.renderSkinColorGrid();
+    this.renderSkinImageGrid();
+  },
+  renderSkinColorGrid(){
+    const grid = document.getElementById('snakeSkinColorGrid');
+    if(!grid) return;
+    const sel = this.data.selectedSkin || { type: 'random' };
+    grid.innerHTML = '';
+
+    // 1) случайный — всегда доступен
+    const randomCard = document.createElement('div');
+    randomCard.className = 'skin-card' + (sel.type === 'random' ? ' selected' : '');
+    randomCard.innerHTML = `
+      <div class="skin-swatch"><span style="background:linear-gradient(90deg,#FFD84D,#3D6BFF,#FF4D4D)"></span></div>
+      <div class="skin-name">🎲 Случайный</div>`;
+    randomCard.addEventListener('click', ()=> this.selectSkin({ type: 'random' }));
+    grid.appendChild(randomCard);
+
+    // 2) свой (кастомный) — открывается, только когда собраны все остальные скины
+    const customUnlocked = this.allColorSkinsUnlocked();
+    const customCard = document.createElement('div');
+    customCard.className = 'skin-card' + (sel.type === 'custom' ? ' selected' : '') + (customUnlocked ? '' : ' locked');
+    customCard.innerHTML = `
+      <div class="skin-swatch"><span style="background:repeating-linear-gradient(45deg,#ccc,#ccc 6px,#eee 6px,#eee 12px)"></span></div>
+      <div class="skin-name">🎨 Свой</div>
+      ${customUnlocked ? '' : '<div class="skin-lock-note">Открой все скины ниже</div>'}`;
+    customCard.addEventListener('click', ()=>{
+      if(!customUnlocked) return;
+      this.selectSkin({ type: 'custom' });
+      this.openCustomEditor();
+    });
+    grid.appendChild(customCard);
+
+    // 3) обычные скины за достижения
+    (this.skins || []).forEach(skin=>{
+      const unlocked = this.isSkinUnlocked(skin);
+      const card = document.createElement('div');
+      card.className = 'skin-card' + (sel.type === 'color' && sel.id === skin.id ? ' selected' : '') + (unlocked ? '' : ' locked');
+      const swatch = (skin.colors || []).map(c=> `<span style="background:${c}"></span>`).join('');
+      const ach = (this.achievements || []).find(a=> a.id === skin.achievementId);
+      card.innerHTML = `
+        <div class="skin-swatch">${swatch}</div>
+        <div class="skin-name">${skin.name || 'Скин'}</div>
+        ${unlocked ? '' : `<div class="skin-lock-note">🔒 ${ach ? ach.title : 'достижение'}</div>`}`;
+      card.addEventListener('click', ()=>{
+        if(!unlocked) return;
+        this.selectSkin({ type: 'color', id: skin.id });
+      });
+      grid.appendChild(card);
+    });
+
+    const editor = document.getElementById('snakeCustomSkinEditor');
+    if(editor) snakeShowEl(editor, sel.type === 'custom' && customUnlocked);
+    if(sel.type === 'custom' && customUnlocked) this.fillCustomColorInputs();
+  },
+  renderSkinImageGrid(){
+    const grid = document.getElementById('snakeSkinImageGrid');
+    const emptyEl = document.getElementById('snakeSkinImageEmpty');
+    if(!grid) return;
+    const list = this.imageSkins || [];
+    snakeShowEl(emptyEl, list.length === 0);
+    grid.innerHTML = '';
+    const sel = this.data.selectedSkin || { type: 'random' };
+    list.forEach(skin=>{
+      const unlocked = this.isSkinUnlocked(skin);
+      const card = document.createElement('div');
+      card.className = 'skin-card' + (sel.type === 'image' && sel.id === skin.id ? ' selected' : '') + (unlocked ? '' : ' locked');
+      const ach = (this.achievements || []).find(a=> a.id === skin.achievementId);
+      card.innerHTML = `
+        <div class="skin-thumb">${skin.headImg ? `<img src="${skin.headImg}" alt="">` : '🐍'}</div>
+        <div class="skin-name">${skin.name || 'Скин'}</div>
+        ${unlocked ? '' : `<div class="skin-lock-note">🔒 ${ach ? ach.title : 'достижение'}</div>`}`;
+      card.addEventListener('click', ()=>{
+        if(!unlocked) return;
+        this.selectSkin({ type: 'image', id: skin.id });
+      });
+      grid.appendChild(card);
+    });
+  },
+  selectSkin(sel){
+    this.data.selectedSkin = sel;
+    if(window.DB) DB.setItem('snakePlayers', this.playerId, { selectedSkin: sel });
+    this.renderSkinModal();
+  },
+  addCustomColorInput(){
+    const wrap = document.getElementById('snakeCustomColorInputs');
+    if(!wrap) return;
+    if(wrap.children.length >= 3) return; // максимум 3 цвета в кастомном скине
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = '#3DDC5A';
+    wrap.appendChild(input);
+  },
+  fillCustomColorInputs(){
+    const wrap = document.getElementById('snakeCustomColorInputs');
+    if(!wrap) return;
+    const colors = (this.data.customSkinColors && this.data.customSkinColors.length) ? this.data.customSkinColors : ['#3DDC5A'];
+    wrap.innerHTML = '';
+    colors.slice(0, 3).forEach(c=>{
+      const input = document.createElement('input');
+      input.type = 'color';
+      input.value = c;
+      wrap.appendChild(input);
+    });
+  },
+  openCustomEditor(){
+    const editor = document.getElementById('snakeCustomSkinEditor');
+    snakeShowEl(editor, true);
+    this.fillCustomColorInputs();
+  },
+  saveCustomSkin(){
+    const wrap = document.getElementById('snakeCustomColorInputs');
+    if(!wrap) return;
+    const colors = Array.from(wrap.querySelectorAll('input[type="color"]')).map(i=> i.value).slice(0, 3);
+    if(!colors.length) return;
+    this.data.customSkinColors = colors;
+    this.data.selectedSkin = { type: 'custom' };
+    if(window.DB) DB.setItem('snakePlayers', this.playerId, { customSkinColors: colors, selectedSkin: { type: 'custom' } });
+    this.renderSkinModal();
+  },
+  // итоговый скин, который будет применён к змейке игрока при старте игры
+  resolvePlayerSkin(){
+    const sel = this.data.selectedSkin || { type: 'random' };
+    if(sel.type === 'custom' && this.allColorSkinsUnlocked()){
+      const colors = (this.data.customSkinColors && this.data.customSkinColors.length) ? this.data.customSkinColors : this.paletteFor(this.playerId);
+      return { type: 'custom', colors };
+    }
+    if(sel.type === 'color'){
+      const skin = (this.skins || []).find(sk=> sk.id === sel.id);
+      if(skin && this.isSkinUnlocked(skin)) return { type: 'color', colors: skin.colors };
+    }
+    if(sel.type === 'image'){
+      const skin = (this.imageSkins || []).find(sk=> sk.id === sel.id);
+      if(skin && this.isSkinUnlocked(skin) && skin.headImg && skin.bodyImg){
+        return { type: 'image', headImg: skin.headImg, bodyImg: skin.bodyImg, id: skin.id };
+      }
+    }
+    // рандом (или сохранённый скин недоступен/удалён/снят администратором) —
+    // как и раньше, стабильный случайный набор цветов по id игрока
+    return { type: 'random', colors: this.paletteFor(this.playerId) };
+  },
+
+
   collectionFor(diff){
     return {
       easy: 'snakeRecordsEasy', medium: 'snakeRecordsMedium',
@@ -354,7 +530,7 @@ const Snake = {
     return {
       id, name, isPlayer: !!isPlayer, isBot: !!isBot, diffKey,
       x, y, angle, targetAngle: angle,
-      len: SNAKE_BASE_LEN, score: 0, alive: true,
+      len: SNAKE_BASE_LEN, visLen: SNAKE_BASE_LEN, score: 0, alive: true,
       trail: [{ x, y }],
       maxSpanEver: SNAKE_BASE_LEN + 60,
       color: this.colorFor(id || name),
@@ -370,6 +546,12 @@ const Snake = {
   collisionRadius(s){
     return snakeClamp(9 + (s.len || SNAKE_BASE_LEN) * 0.006, 9, 26);
   },
+  // радиус ТОЛЬКО для отрисовки — по сглаженной визуальной длине
+  // (s.visLen), чтобы утолщение змейки при росте тоже не скакало
+  // мгновенно, а плавно поспевало за сглаженным хвостом
+  collisionRadiusForRender(s){
+    return snakeClamp(9 + (s.visLen !== undefined ? s.visLen : (s.len || SNAKE_BASE_LEN)) * 0.006, 9, 26);
+  },
   // возвращает только ту часть следа, которая соответствует текущей
   // (актуальной) длине змейки — в отличие от s.trail, который теперь
   // хранит НЕМНОГО больше истории про запас (см. комментарий в
@@ -381,6 +563,21 @@ const Snake = {
     const trail = s.trail;
     if(!trail || trail.length < 2) return trail || [];
     const want = (s.len || SNAKE_BASE_LEN) + 60;
+    let acc = 0;
+    for(let i = 1; i < trail.length; i++){
+      acc += snakeDist(trail[i - 1].x, trail[i - 1].y, trail[i].x, trail[i].y);
+      if(acc > want) return trail.slice(0, i + 1);
+    }
+    return trail;
+  },
+  // то же самое, но по СГЛАЖЕННОЙ визуальной длине (s.visLen) — только
+  // для отрисовки тела змейки, чтобы рост после еды не выглядел резким
+  // скачком (см. stepSnake). Столкновения и всё остальное продолжают
+  // использовать обычный visibleSpanTrail() по настоящей длине.
+  visibleSpanTrailForRender(s){
+    const trail = s.trail;
+    if(!trail || trail.length < 2) return trail || [];
+    const want = (s.visLen !== undefined ? s.visLen : (s.len || SNAKE_BASE_LEN)) + 60;
     let acc = 0;
     for(let i = 1; i < trail.length; i++){
       acc += snakeDist(trail[i - 1].x, trail[i - 1].y, trail[i].x, trail[i].y);
@@ -432,6 +629,7 @@ const Snake = {
     if(scoreEl) scoreEl.textContent = '0';
 
     this.player = this.makeSnake(this.playerId, getNickname(), true, false, null);
+    this.player.skin = this.resolvePlayerSkin();
     this.desiredAngle = this.player.angle;
     this.inputBoost = false;
     this.camZoom = 1;
@@ -706,6 +904,8 @@ const Snake = {
 
     const diffPill = document.getElementById('snakeDiffPill');
     if(diffPill) diffPill.textContent = '🌐 Онлайн · ' + this.roomId;
+    snakeShowEl(document.getElementById('snakePingPill'), true);
+    this.startPingTimer();
 
     this.fitCanvas();
 
@@ -715,6 +915,7 @@ const Snake = {
     if(scoreEl) scoreEl.textContent = '0';
 
     this.player = this.makeSnake(this.playerId, getNickname(), true, false, null);
+    this.player.skin = this.resolvePlayerSkin();
     this.desiredAngle = this.player.angle;
     this.inputBoost = false;
     this.camZoom = 1;
@@ -799,6 +1000,18 @@ const Snake = {
 
   stepSnake(s, dt){
     if(!s.alive) return;
+    // визуальная длина (s.visLen) плавно "догоняет" настоящую длину
+    // (s.len) вместо мгновенного скачка — раньше при поедании крупной
+    // еды хвост в тот же кадр резко "выстреливал" на всю прибавку сразу
+    // (особенно заметно на большой еде: +120 к длине за один кадр). Само
+    // столкновение по-прежнему считается по настоящей s.len (см. ниже
+    // checkCollisions/visibleSpanTrail) — плавность только визуальная,
+    // на честность игры не влияет.
+    if(s.visLen === undefined) s.visLen = s.len;
+    const lenDiff = s.len - s.visLen;
+    if(Math.abs(lenDiff) > 0.05) s.visLen += lenDiff * Math.min(1, dt * 6);
+    else s.visLen = s.len;
+
     let diff = snakeNormAngle(s.targetAngle - s.angle);
     const maxTurn = (s.turnRate || SNAKE_TURN_RATE) * dt;
     if(Math.abs(diff) > maxTurn) diff = Math.sign(diff) * maxTurn;
@@ -1218,11 +1431,85 @@ const Snake = {
   },
 
   drawSnakeBody(ctx, s){
-    const visible = this.visibleSpanTrail(s);
+    const visible = this.visibleSpanTrailForRender(s);
     const pts = [{ x: s.x, y: s.y }].concat(visible || []);
-    const r = this.collisionRadius(s);
+    const r = this.collisionRadiusForRender(s);
     if(pts.length < 2) pts.push({ x: s.x - Math.cos(s.angle) * 4, y: s.y - Math.sin(s.angle) * 4 });
 
+    // картиночный скин (голова+тело из img, см. п.6/7 запроса) — если
+    // обе картинки заданы, рисуем ими; иначе (например, при загрузке
+    // самих картинок из base64) используем обычную полосатую отрисовку
+    if(s.skin && s.skin.type === 'image' && s.skin.headImg && s.skin.bodyImg){
+      this.drawSnakeBodyImage(ctx, s, pts, r);
+      return;
+    }
+    this.drawSnakeBandBody(ctx, s, pts, r);
+  },
+  // кэш уже загруженных картинок скинов — чтобы не пересоздавать Image()
+  // на каждый кадр (это разрушило бы всю плавность отрисовки)
+  getSkinImage(src){
+    if(!src) return null;
+    if(!this._skinImageCache) this._skinImageCache = {};
+    let img = this._skinImageCache[src];
+    if(!img){
+      img = new Image();
+      img.src = src;
+      this._skinImageCache[src] = img;
+    }
+    return img;
+  },
+  // тело "картиночного" скина строится из повторяющихся кусочков одной
+  // и той же картинки-тела (как и просили — "туловище строится из
+  // кусочков"), развёрнутых по направлению движения в каждой точке; поверх
+  // головы змейки рисуется отдельная картинка головы
+  drawSnakeBodyImage(ctx, s, pts, r){
+    const bodyImg = this.getSkinImage(s.skin.bodyImg);
+    const headImg = this.getSkinImage(s.skin.headImg);
+    const tileSize = r * 2.15;
+
+    if(bodyImg && bodyImg.complete && bodyImg.naturalWidth){
+      const spacing = Math.max(6, r * 1.1);
+      let acc = spacing; // рисуем и самый первый кусочек, а не только после накопления шага
+      for(let i = 1; i < pts.length; i++){
+        const a = pts[i - 1], b = pts[i];
+        acc += snakeDist(a.x, a.y, b.x, b.y);
+        if(acc >= spacing){
+          acc = 0;
+          const ang = Math.atan2(b.y - a.y, b.x - a.x);
+          ctx.save();
+          ctx.translate(b.x, b.y);
+          ctx.rotate(ang);
+          ctx.drawImage(bodyImg, -tileSize / 2, -tileSize / 2, tileSize, tileSize);
+          ctx.restore();
+        }
+      }
+    } else {
+      // картинка тела ещё не загрузилась — не даём змейке "исчезнуть"
+      this.drawSnakeBandBody(ctx, s, pts, r);
+      return;
+    }
+
+    if(headImg && headImg.complete && headImg.naturalWidth){
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate(s.angle);
+      ctx.drawImage(headImg, -tileSize * 0.65, -tileSize * 0.65, tileSize * 1.3, tileSize * 1.3);
+      ctx.restore();
+    } else {
+      this.drawSnakeEyes(ctx, s, r);
+    }
+  },
+  drawSnakeEyes(ctx, s, r){
+    const hx = s.x, hy = s.y;
+    [-1, 1].forEach(side=>{
+      const ang = s.angle + side * 0.6;
+      const ex = hx + Math.cos(ang) * r * 0.55, ey = hy + Math.sin(ang) * r * 0.55;
+      ctx.beginPath(); ctx.arc(ex, ey, r * 0.28, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+      const px = hx + Math.cos(ang) * r * 0.68, py = hy + Math.sin(ang) * r * 0.68;
+      ctx.beginPath(); ctx.arc(px, py, r * 0.13, 0, Math.PI * 2); ctx.fillStyle = '#222'; ctx.fill();
+    });
+  },
+  drawSnakeBandBody(ctx, s, pts, r){
     const outline = new Path2D();
     outline.moveTo(pts[0].x, pts[0].y);
     for(let i = 1; i < pts.length; i++) outline.lineTo(pts[i].x, pts[i].y);
@@ -1259,15 +1546,7 @@ const Snake = {
     ctx.strokeStyle = palette[bandIdx % palette.length];
     ctx.stroke(path); // дорисовываем "хвостик" последней неполной полосы
 
-    // глаза на голове, смотрят по направлению движения
-    const hx = s.x, hy = s.y;
-    [-1, 1].forEach(side=>{
-      const ang = s.angle + side * 0.6;
-      const ex = hx + Math.cos(ang) * r * 0.55, ey = hy + Math.sin(ang) * r * 0.55;
-      ctx.beginPath(); ctx.arc(ex, ey, r * 0.28, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
-      const px = hx + Math.cos(ang) * r * 0.68, py = hy + Math.sin(ang) * r * 0.68;
-      ctx.beginPath(); ctx.arc(px, py, r * 0.13, 0, Math.PI * 2); ctx.fillStyle = '#222'; ctx.fill();
-    });
+    this.drawSnakeEyes(ctx, s, r);
   },
 
   drawNicknames(ctx, camX, camY, w, h, zoom){
@@ -1322,10 +1601,30 @@ const Snake = {
     this.running = false; this.paused = false;
     if(this.mode === 'online') this.leaveOnlineRoom();
     this.mode = null;
+    this.stopPingTimer();
+    snakeHide(document.getElementById('snakePingPill'));
     snakeHide(document.getElementById('snakePauseOverlay'));
     snakeHide(document.getElementById('snakeGameOverOverlay'));
     snakeHide(document.getElementById('snakeGameScreen'));
     snakeShow(document.getElementById('snakeMenuScreen'));
+  },
+  // пинг до базы, пока идёт онлайн-игра — обновляется раз в 4 секунды,
+  // чтобы не нагружать базу лишними запросами, но давать достаточно
+  // свежую картину задержки соединения
+  startPingTimer(){
+    this.stopPingTimer();
+    const tick = ()=>{
+      if(!window.DB || this.mode !== 'online') return;
+      DB.measurePing(this.playerId).then(ms=>{
+        const el = document.getElementById('snakePingValue');
+        if(el) el.textContent = (ms === null) ? '—' : ms + ' мс';
+      });
+    };
+    tick();
+    this._pingInterval = setInterval(tick, 4000);
+  },
+  stopPingTimer(){
+    if(this._pingInterval){ clearInterval(this._pingInterval); this._pingInterval = null; }
   },
 
   bindUI(){
@@ -1362,6 +1661,24 @@ const Snake = {
     if(onlineJoinBtn) onlineJoinBtn.addEventListener('click', ()=> this.joinRoomByCode());
     const onlineStartBtn = document.getElementById('snakeOnlineStartBtn');
     if(onlineStartBtn) onlineStartBtn.addEventListener('click', ()=> this.startOnlineGame());
+
+    const skinBtn = document.getElementById('snakeSkinBtn');
+    if(skinBtn) skinBtn.addEventListener('click', ()=> this.openSkinModal());
+    const skinCloseBtn = document.getElementById('snakeSkinCloseBtn');
+    if(skinCloseBtn) skinCloseBtn.addEventListener('click', ()=> snakeHide(document.getElementById('snakeSkinModal')));
+    document.querySelectorAll('.skin-tab').forEach(tab=>{
+      tab.addEventListener('click', ()=>{
+        document.querySelectorAll('.skin-tab').forEach(t=> t.classList.remove('active'));
+        tab.classList.add('active');
+        const isColors = tab.dataset.tab === 'colors';
+        snakeShowEl(document.getElementById('snakeSkinPaneColors'), isColors);
+        snakeShowEl(document.getElementById('snakeSkinPaneImages'), !isColors);
+      });
+    });
+    const customAddBtn = document.getElementById('snakeCustomColorAddBtn');
+    if(customAddBtn) customAddBtn.addEventListener('click', ()=> this.addCustomColorInput());
+    const customSaveBtn = document.getElementById('snakeCustomColorSaveBtn');
+    if(customSaveBtn) customSaveBtn.addEventListener('click', ()=> this.saveCustomSkin());
 
     const restartBtn = document.getElementById('snakeRestartBtn');
     if(restartBtn){

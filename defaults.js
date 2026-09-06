@@ -78,6 +78,22 @@ const DEFAULTS = {
     { id: 'sach8', emoji: '🌐', title: 'Онлайн-охотник',  desc: 'Набери 30 очков в онлайн-игре',         type: 'bestOnline', target: 30 }
   ],
 
+  /* ---- цветные скины змейки (открываются за достижения из snakeAchievements) ---- */
+  snakeSkins: [
+    { id: 'sskin1', name: 'Жёлто-синяя',   colors: ['#FFD84D', '#3D6BFF'],            achievementId: 'sach1', order: 1 },
+    { id: 'sskin2', name: 'Триколор',      colors: ['#FF4D4D', '#3D6BFF', '#F4F4F4'], achievementId: 'sach2', order: 2 },
+    { id: 'sskin3', name: 'Ядовитая',      colors: ['#3DDC5A', '#FF4D4D'],            achievementId: 'sach3', order: 3 },
+    { id: 'sskin4', name: 'Полночь',       colors: ['#242424', '#7A4DFF'],            achievementId: 'sach4', order: 4 },
+    { id: 'sskin5', name: 'Закат',         colors: ['#FF7A3D', '#FF4D9D', '#FFD84D'], achievementId: 'sach5', order: 5 },
+    { id: 'sskin6', name: 'Ледяная',       colors: ['#3DD9FF', '#F4F4F4'],            achievementId: 'sach6', order: 6 },
+    { id: 'sskin7', name: 'Хаки',          colors: ['#7A8A3D', '#4D5A2A', '#D9CBA0'], achievementId: 'sach7', order: 7 },
+    { id: 'sskin8', name: 'Королевская',   colors: ['#FFD84D', '#7A2AFF'],            achievementId: 'sach8', order: 8 }
+  ],
+
+  /* ---- картиночные скины змейки (голова+тело), заполняются/загружаются через админку ---- */
+  snakeImageSkins: [
+  ],
+
   /* ---- уровни в змейке-классике (по суммарно пойманным банкам за все игры) ---- */
   snakeClassicLevels: [
     { id: 'sclvl1', min: 0,   max: 14,     name: 'Новичок-змейка',  emoji: '🥄' },

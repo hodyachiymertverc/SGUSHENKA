@@ -537,6 +537,21 @@ const DB = {
       this._notifyCollection(name);
     }
   },
+  // измеряет пинг до базы — пишет крошечное служебное значение в
+  // отдельную ветку "_ping" и засекает время до подтверждения записи
+  // сервером (это и есть реальный round-trip до базы, в отличие от
+  // '.info/serverTimeOffset', который синхронизируется один раз и потом
+  // отдаётся мгновенно из локального кэша, не отражая живую задержку)
+  measurePing(probeId){
+    return new Promise(resolve=>{
+      if(!this.cloud){ resolve(null); return; } // без облака (локальный режим) пинг не имеет смысла
+      const t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+      this.rtdb.ref('_ping/' + probeId).set(t0).then(()=>{
+        const t1 = (window.performance && performance.now) ? performance.now() : Date.now();
+        resolve(Math.max(0, Math.round(t1 - t0)));
+      }).catch(()=> resolve(null));
+    });
+  },
   // отмечает достижения как разблокированные (nested unlocked.<achId> = true),
   // работает одинаково в облаке и локально
   markUnlocked(name, id, achIds){
