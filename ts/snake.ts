@@ -291,6 +291,7 @@ interface SnakeGame {
   colorFor(seed: unknown): string;
   paletteFor(seed: unknown): string[];
   skinColorsFor(s: SnakeEntity): string[];
+  peerList(): SnakeEntity[];
   genRoomCode(): string;
   makeSnake(id: string, name: string, isPlayer: boolean, isBot: boolean, diffKey: SnakeDifficulty | null): SnakeEntity;
   makeBot(diffKey: SnakeDifficulty): SnakeEntity;
@@ -800,6 +801,21 @@ const Snake: SnakeGame = {
     if(s && s.skin && 'colors' in s.skin && Array.isArray(s.skin.colors) && s.skin.colors.length) return s.skin.colors;
     return this.paletteFor((s && (s.id || s.name)) || s);
   },
+  // список онлайн-соперников в виде обычного массива. Раньше в разных
+  // местах для этого использовался Object.values(this.peers) напрямую —
+  // на компиляторе, который реально используется в CI, конкретно у
+  // этого выражения (Record<string, SnakeEntity>, пришедший из большого
+  // самоссылающегося объекта Snake) вывод типа результата иногда
+  // схлопывался в unknown[], хотя точно такой же перебор через for..in
+  // (как в checkCollisions) компилировался без проблем. Собираем список
+  // именно так — через for..in — и используем этот метод везде вместо
+  // прямых вызовов Object.values(this.peers), чтобы полностью обойти
+  // этот компиляторный edge case.
+  peerList(): SnakeEntity[] {
+    const out: SnakeEntity[] = [];
+    for(const id in this.peers) out.push(this.peers[id]);
+    return out;
+  },
   genRoomCode(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let s = ''; for(let i = 0; i < 5; i++) s += chars[Math.floor(Math.random() * chars.length)];
@@ -1142,7 +1158,7 @@ const Snake: SnakeGame = {
   // и убирает рывки, и чинит "зависающий" хвост.
   updatePeersMotion(dt: number): void {
     if(this.mode !== 'online') return;
-    Object.values(this.peers).forEach(peer=>{
+    this.peerList().forEach(peer=>{
       if(peer._toX == null) return;
       peer._lerpT = Math.min(1, (peer._lerpT || 0) + dt / SNAKE_ONLINE_INTERP_TIME);
       const t = peer._lerpT;
@@ -1382,7 +1398,7 @@ const Snake: SnakeGame = {
     // раз на весь вызов (а не заново для каждого бота), чтобы не тратить
     // время на повторный сбор одних и тех же змей 10-20 раз за кадр
     const allSnakes = ([this.player] as SnakeEntity[]).concat(this.bots).filter(s=> s.alive);
-    const peerSnakes = this.mode === 'online' ? Object.values(this.peers || {}).filter(p=> p.alive) : [];
+    const peerSnakes = this.mode === 'online' ? this.peerList().filter(p=> p.alive) : [];
     const obstacles = allSnakes.concat(peerSnakes);
 
     this.bots.forEach(b=>{
@@ -1510,7 +1526,7 @@ const Snake: SnakeGame = {
   findNearest(self: SnakeEntity, sight: number, predicate: (other: SnakeEntity)=>boolean): SnakeEntity | null {
     let best: SnakeEntity | null = null, bestD = sight;
     const candidates: SnakeEntity[] = ([] as SnakeEntity[]).concat(this.player ? [this.player] : []).concat(this.bots);
-    if(this.mode === 'online') Array.prototype.push.apply(candidates, Object.values(this.peers || {}));
+    if(this.mode === 'online') Array.prototype.push.apply(candidates, this.peerList());
     candidates.forEach(other=>{
       if(other === self || !other.alive) return;
       if(!predicate(other)) return;
@@ -1711,7 +1727,7 @@ const Snake: SnakeGame = {
 
     this.bots.forEach(b=>{ if(b.alive) this.drawSnakeBody(ctx, b); });
     if(this.mode === 'online'){
-      Object.values(this.peers).forEach(peer=>{ if(peer.alive) this.drawSnakeBody(ctx, peer); });
+      this.peerList().forEach(peer=>{ if(peer.alive) this.drawSnakeBody(ctx, peer); });
     }
     if(p.alive) this.drawSnakeBody(ctx, p);
 
@@ -1924,7 +1940,7 @@ const Snake: SnakeGame = {
     const list: SnakeEntity[] = [];
     if(this.player.alive) list.push(this.player);
     this.bots.forEach(b=>{ if(b.alive) list.push(b); });
-    if(this.mode === 'online') Object.values(this.peers).forEach(peer=>{ if(peer.alive) list.push(peer); });
+    if(this.mode === 'online') this.peerList().forEach(peer=>{ if(peer.alive) list.push(peer); });
 
     ctx.font = '700 13px Nunito, sans-serif';
     ctx.textAlign = 'center';
@@ -1946,7 +1962,7 @@ const Snake: SnakeGame = {
     const entries: LeaderboardEntry[] = [{ id: 'me', name: getNickname() + ' (Вы)', score: this.score || 0, isMe: true }];
     this.bots.forEach(b=> entries.push({ id: b.id, name: b.name, score: b.score || 0 }));
     if(this.mode === 'online'){
-      Object.values(this.peers).forEach(peer=> entries.push({ id: peer.id, name: peer.name || 'Игрок', score: peer.score || 0 }));
+      this.peerList().forEach(peer=> entries.push({ id: peer.id, name: peer.name || 'Игрок', score: peer.score || 0 }));
     }
     entries.sort((a, b)=> b.score - a.score);
 
