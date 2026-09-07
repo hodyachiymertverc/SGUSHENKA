@@ -8,3 +8,8 @@ admin-config.js
 # системные файлы
 .DS_Store
 Thumbs.db
+
+# зависимости сборки TypeScript (см. package.json/tsconfig.json) —
+# не коммитим, ставятся заново через `npm ci` (и то же самое делает
+# шаг сборки в .github/workflows/deploy-pages.yml перед деплоем)
+node_modules/

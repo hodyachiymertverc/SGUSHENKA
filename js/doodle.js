@@ -77,7 +77,7 @@ const Doodle = {
   pointerTargetX: null,
 
   /* способ управления: 'tilt' (наклон телефона) или 'buttons' (тап по
-     половинам экрана) — выбирается в Настройках, хранится на устройстве */
+     половинам экрана) — выбирается в меню, хранится на устройстве */
   controlMode: 'tilt',
 
   /* наклон телефона (гироскоп) — управление персонажем */
@@ -190,17 +190,12 @@ const Doodle = {
     const tiltBtn = document.getElementById('doodleControlTiltBtn');
     const btnsBtn = document.getElementById('doodleControlButtonsBtn');
     const hint = document.getElementById('doodleControlHint');
-    const settingsHint = document.getElementById('doodleSettingsHint');
     if(tiltBtn) tiltBtn.classList.toggle('active', this.controlMode === 'tilt');
     if(btnsBtn) btnsBtn.classList.toggle('active', this.controlMode === 'buttons');
-    const hintText = this.controlMode === 'buttons'
-      ? 'Держи палец в левой половине экрана — прыгун идёт налево, в правой — направо'
-      : 'Наклоняй телефон влево/вправо, на компьютере — стрелки ← → или A/D';
-    if(hint) hint.textContent = hintText;
-    if(settingsHint){
-      settingsHint.textContent = this.controlMode === 'buttons'
-        ? 'Кнопки: палец слева — налево, справа — направо. Сохраняется на этом устройстве.'
-        : 'Акселерометр: наклоняй телефон. На ПК — стрелки ← → или A/D. Сохраняется на этом устройстве.';
+    if(hint){
+      hint.textContent = this.controlMode === 'buttons'
+        ? 'Держи палец в левой половине экрана — прыгун идёт налево, в правой — направо'
+        : 'Наклоняй телефон влево/вправо, на компьютере — стрелки ← → или A/D';
     }
   },
   setControlMode(mode){
@@ -1101,6 +1096,16 @@ const Doodle = {
     const skinCloseBtn = document.getElementById('doodleSkinCloseBtn');
     if(skinBtn) skinBtn.addEventListener('click', ()=> this.openSkinModal());
     if(skinCloseBtn) skinCloseBtn.addEventListener('click', ()=> this.closeSkinModal());
+
+    // настройки (сейчас там выбор способа управления) — открываются
+    // отдельной модалкой из меню, а не занимают место прямо в меню
+    const settingsBtn = document.getElementById('doodleSettingsBtn');
+    if(settingsBtn){
+      settingsBtn.addEventListener('click', ()=>{
+        this.renderControlModeUI();
+        doodleShow(document.getElementById('doodleSettingsModal'));
+      });
+    }
 
     window.addEventListener('resize', ()=> this.fitCanvas());
     window.addEventListener('orientationchange', ()=> setTimeout(()=> this.fitCanvas(), 200));

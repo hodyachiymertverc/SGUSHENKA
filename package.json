@@ -1,0 +1,13 @@
+{
+  "name": "sgushenka-site",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Сайт с играми (сгущёнка, дудл-джамп, змейка и др.). Статический HTML/CSS/JS без сборщика — единственная часть, которая реально собирается, это Змейка.io: она написана на TypeScript (ts/snake.ts) и компилируется в js/snake.js.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

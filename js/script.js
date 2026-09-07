@@ -165,7 +165,8 @@ function submitScore(score){
   DB.addRecord(getPlayerId(), getNickname(), score);
 }
 
-/* ---- Настройки (звук/музыка + управление Doodle) ---- */
+/* ---- Настройки (звук/музыка) ---- */
+const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
 const sfxToggle = document.getElementById('sfxToggle');
 const musicToggle = document.getElementById('musicToggle');
@@ -176,16 +177,10 @@ function refreshToggle(btn, on){
 }
 function isNicknameLocked(){ return !!LocalPrefs.get(KEYS.nicknameLocked, false); }
 
-function openSettings(){
+settingsBtn.addEventListener('click', ()=>{
   refreshToggle(sfxToggle, SoundManager.sfxOn);
   refreshToggle(musicToggle, SoundManager.musicOn);
-  if(window.Doodle && typeof Doodle.renderControlModeUI === 'function'){
-    Doodle.renderControlModeUI();
-  }
   show(settingsModal);
-}
-document.querySelectorAll('[data-open-settings]').forEach(btn=>{
-  btn.addEventListener('click', openSettings);
 });
 sfxToggle.addEventListener('click', ()=> refreshToggle(sfxToggle, sfxToggle.dataset.on !== 'true'));
 musicToggle.addEventListener('click', ()=> refreshToggle(musicToggle, musicToggle.dataset.on !== 'true'));

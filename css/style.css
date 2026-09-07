@@ -243,14 +243,6 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 
 #saveSettingsBtn{ width:100%; margin-top:22px; }
 
-.settings-section-title{
-  margin: 22px 0 0;
-  font-size: 1.05rem;
-  text-align: center;
-}
-.settings-doodle-controls{ margin-top: 10px; }
-#doodleSettingsHint{ text-align:center; margin-top:10px; }
-
 /* Список новостей (превью) */
 .news-list{ display:flex; flex-direction:column; gap:12px; margin-top:14px; }
 .news-item{

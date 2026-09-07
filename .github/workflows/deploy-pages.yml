@@ -27,6 +27,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Установить зависимости (TypeScript)
+        run: npm install
+
+      - name: Собрать TypeScript → JS (Змейка.io, ts/snake.ts → js/snake.js)
+        run: npm run build
+
       - name: Сгенерировать firebase-config.js из секретов
         run: |
           cat > firebase-config.js << EOF
