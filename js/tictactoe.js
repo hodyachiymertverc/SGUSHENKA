@@ -195,15 +195,21 @@ const TicTacToe = {
       this.checkAchievements();
     });
 
-    DB.getItemOnce('tttPlayers', this.playerId).then(doc=>{
-      if(!doc){
-        DB.setItem('tttPlayers', this.playerId, {
-          name: getNickname(), wins: 0, losses: 0, draws: 0, gamesPlayed: 0,
-          winsVsBot: 0, winsOnline: 0, streak: 0, bestStreak: 0, unlocked: {}
-        });
-      } else if(doc.name !== getNickname()){
-        DB.setItem('tttPlayers', this.playerId, { name: getNickname() });
-      }
+    // ждём nicknameReady (см. player.js) перед сверкой ника — иначе
+    // возможна гонка: если админ переименовал игрока, пока тот был
+    // офлайн, здесь ещё можно успеть сравнить со СТАРЫМ getNickname()
+    // и затереть им уже обновлённое админом имя в tttPlayers
+    (window.nicknameReady || Promise.resolve()).then(()=>{
+      DB.getItemOnce('tttPlayers', this.playerId).then(doc=>{
+        if(!doc){
+          DB.setItem('tttPlayers', this.playerId, {
+            name: getNickname(), wins: 0, losses: 0, draws: 0, gamesPlayed: 0,
+            winsVsBot: 0, winsOnline: 0, streak: 0, bestStreak: 0, unlocked: {}
+          });
+        } else if(doc.name !== getNickname()){
+          DB.setItem('tttPlayers', this.playerId, { name: getNickname() });
+        }
+      });
     });
   },
 

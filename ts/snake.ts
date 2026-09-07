@@ -437,14 +437,20 @@ const Snake: SnakeGame = {
       this.checkAchievements();
     });
 
-    DB.getItemOnce('snakePlayers', this.playerId).then(doc=>{
-      if(!doc){
-        DB.setItem('snakePlayers', this.playerId as string, {
-          name: getNickname(), totalCaught: 0, gamesPlayed: 0, bestEasy: 0, bestMedium: 0, bestHard: 0, bestOnline: 0, unlocked: {}
-        });
-      } else if(doc.name !== getNickname()){
-        DB.setItem('snakePlayers', this.playerId as string, { name: getNickname() });
-      }
+    // ждём nicknameReady (см. player.js) перед сверкой ника — иначе
+    // возможна гонка: если админ переименовал игрока, пока тот был
+    // офлайн, здесь ещё можно успеть сравнить со СТАРЫМ getNickname()
+    // и затереть им уже обновлённое админом имя в snakePlayers
+    ((window as any).nicknameReady || Promise.resolve()).then(()=>{
+      DB.getItemOnce('snakePlayers', this.playerId).then(doc=>{
+        if(!doc){
+          DB.setItem('snakePlayers', this.playerId as string, {
+            name: getNickname(), totalCaught: 0, gamesPlayed: 0, bestEasy: 0, bestMedium: 0, bestHard: 0, bestOnline: 0, unlocked: {}
+          });
+        } else if(doc.name !== getNickname()){
+          DB.setItem('snakePlayers', this.playerId as string, { name: getNickname() });
+        }
+      });
     });
 
     // если вкладку/приложение закрыли прямо во время поиска комнаты или

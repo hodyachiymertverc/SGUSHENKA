@@ -128,14 +128,20 @@ const Doodle = {
       this.checkAchievements();
     });
 
-    DB.getItemOnce('doodlePlayers', this.playerId).then(doc=>{
-      if(!doc){
-        DB.setItem('doodlePlayers', this.playerId, {
-          name: getNickname(), bestScore: 0, totalScore: 0, gamesPlayed: 0, springsUsed: 0, unlocked: {}, selectedSkin: null
-        });
-      } else if(doc.name !== getNickname()){
-        DB.setItem('doodlePlayers', this.playerId, { name: getNickname() });
-      }
+    // ждём nicknameReady (см. player.js) перед сверкой ника — иначе
+    // возможна гонка: если админ переименовал игрока, пока тот был
+    // офлайн, здесь ещё можно успеть сравнить со СТАРЫМ getNickname()
+    // и затереть им уже обновлённое админом имя в doodlePlayers
+    (window.nicknameReady || Promise.resolve()).then(()=>{
+      DB.getItemOnce('doodlePlayers', this.playerId).then(doc=>{
+        if(!doc){
+          DB.setItem('doodlePlayers', this.playerId, {
+            name: getNickname(), bestScore: 0, totalScore: 0, gamesPlayed: 0, springsUsed: 0, unlocked: {}, selectedSkin: null
+          });
+        } else if(doc.name !== getNickname()){
+          DB.setItem('doodlePlayers', this.playerId, { name: getNickname() });
+        }
+      });
     });
   },
 

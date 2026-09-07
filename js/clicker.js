@@ -52,15 +52,21 @@ const Clicker = {
       this.checkAchievements();
     });
 
-    DB.getItemOnce('clickerPlayers', this.playerId).then(doc=>{
-      if(!doc){
-        DB.setItem('clickerPlayers', this.playerId, {
-          name: getNickname(), balance: 0, totalEarned: 0, autoEarned: 0,
-          totalClicks: 0, upgradesBought: 0, upgradeLevels: {}, unlocked: {}
-        });
-      } else if(doc.name !== getNickname()){
-        DB.setItem('clickerPlayers', this.playerId, { name: getNickname() });
-      }
+    // ждём nicknameReady (см. player.js) перед сверкой ника — иначе
+    // возможна гонка: если админ переименовал игрока, пока тот был
+    // офлайн, здесь ещё можно успеть сравнить со СТАРЫМ getNickname()
+    // и затереть им уже обновлённое админом имя в clickerPlayers
+    (window.nicknameReady || Promise.resolve()).then(()=>{
+      DB.getItemOnce('clickerPlayers', this.playerId).then(doc=>{
+        if(!doc){
+          DB.setItem('clickerPlayers', this.playerId, {
+            name: getNickname(), balance: 0, totalEarned: 0, autoEarned: 0,
+            totalClicks: 0, upgradesBought: 0, upgradeLevels: {}, unlocked: {}
+          });
+        } else if(doc.name !== getNickname()){
+          DB.setItem('clickerPlayers', this.playerId, { name: getNickname() });
+        }
+      });
     });
 
     this.bindUI();

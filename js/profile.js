@@ -58,22 +58,30 @@ const Profile = {
 
   ensureProfileAndStreak(){
     if(!window.DB) return;
-    DB.getItemOnce('profiles', this.playerId).then(doc=>{
-      const today = todayStr();
-      if(!doc){
-        DB.setItem('profiles', this.playerId, {
-          name: getNickname(), points: 0, reactions: 0, playSeconds: 0,
-          streak: 1, lastLoginDate: today, unlocked: {}
-        });
-        return;
-      }
-      const patch = {};
-      if(doc.name !== getNickname()) patch.name = getNickname();
-      if(doc.lastLoginDate !== today){
-        patch.streak = (doc.lastLoginDate === yesterdayStr()) ? (doc.streak || 0) + 1 : 1;
-        patch.lastLoginDate = today;
-      }
-      if(Object.keys(patch).length) DB.setItem('profiles', this.playerId, patch);
+    // ждём nicknameReady (см. player.js) перед сверкой ника — иначе
+    // возможна гонка: если админ переименовал игрока, пока тот был
+    // офлайн, здесь ещё можно успеть сравнить со СТАРЫМ getNickname()
+    // и затереть им уже обновлённое админом имя прямо в profiles (том
+    // же документе, куда админка пишет nameSetByAdmin) — это была самая
+    // частая причина, почему переименование через админку "не долетало".
+    (window.nicknameReady || Promise.resolve()).then(()=>{
+      DB.getItemOnce('profiles', this.playerId).then(doc=>{
+        const today = todayStr();
+        if(!doc){
+          DB.setItem('profiles', this.playerId, {
+            name: getNickname(), points: 0, reactions: 0, playSeconds: 0,
+            streak: 1, lastLoginDate: today, unlocked: {}
+          });
+          return;
+        }
+        const patch = {};
+        if(doc.name !== getNickname()) patch.name = getNickname();
+        if(doc.lastLoginDate !== today){
+          patch.streak = (doc.lastLoginDate === yesterdayStr()) ? (doc.streak || 0) + 1 : 1;
+          patch.lastLoginDate = today;
+        }
+        if(Object.keys(patch).length) DB.setItem('profiles', this.playerId, patch);
+      });
     });
   },
 

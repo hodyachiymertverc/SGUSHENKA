@@ -74,20 +74,58 @@ function getNickname(){
    применённая нами, переносим новый ник в localStorage и блокируем его
    (как будто игрок сам его задал и подтвердил) — благодаря живому
    соединению это происходит, пока игрок ещё на сайте, почти мгновенно;
-   если его не было на сайте в момент правки — применится при заходе. */
+   если его не было на сайте в момент правки — применится при заходе.
+
+   ВАЖНО про гонку с играми: каждая игра (Змейка, Кликер, Doodle,
+   крестики-нолики и т.п.) при загрузке страницы сама сверяет ник,
+   сохранённый в СВОЕЙ коллекции (snakePlayers/clickerPlayers/…), с
+   getNickname() — и если они не совпадают, перезаписывает игровую
+   запись локальным ником (это нужно, чтобы ник, который игрок правит
+   САМ на сайте, долетал до игр). Раньше это делалось независимо и
+   сразу при загрузке — если админ переименовал игрока, ПОКА тот был
+   офлайн, то при следующем заходе получалась гонка двух независимых
+   чтений из базы: если проверка внутри игры успевала сработать РАНЬШЕ,
+   чем здесь успевал примениться новый ник от админа, getNickname() ещё
+   возвращал СТАРЫЙ локальный ник — и игра, "чиня" несовпадение,
+   затирала им уже обновлённую админом запись в своей же коллекции.
+   Из-за этого переименование через админку иногда не долетало до
+   какой-то конкретной игры (какая именно — зависело от того, чьё
+   сетевое чтение оказывалось быстрее).
+
+   Чтобы исключить эту гонку, здесь публикуется window.nicknameReady —
+   промис, который резолвится ПОСЛЕ первой проверки профиля игрока (и
+   применения ника от админа, если он есть). Каждая игра теперь ждёт
+   этот промис перед своей проверкой "ник в базе == getNickname()", так
+   что к моменту сравнения свежий ник от админа уже гарантированно
+   применён локально. */
+let _resolveNicknameReady;
+window.nicknameReady = new Promise(resolve => { _resolveNicknameReady = resolve; });
+
+function applyAdminNicknameOverride(doc){
+  if(!doc || !doc.nameSetByAdmin || !doc.name) return;
+  const appliedTs = LocalPrefs.get(KEYS.nicknameAdminTs, 0);
+  if(doc.nameSetByAdmin > appliedTs){
+    LocalPrefs.set(KEYS.nickname, doc.name);
+    LocalPrefs.set(KEYS.nicknameLocked, true);
+    LocalPrefs.set(KEYS.nicknameAdminTs, doc.nameSetByAdmin);
+    if(typeof window.onNicknameChangedByAdmin === 'function') window.onNicknameChangedByAdmin(doc.name);
+  }
+}
 function watchAdminNicknameOverride(){
-  if(!window.DB) return;
+  if(!window.DB){ _resolveNicknameReady(); return; }
   const id = getPlayerId();
+  let first = true;
   DB.watchItem('profiles', id, doc=>{
-    if(!doc || !doc.nameSetByAdmin || !doc.name) return;
-    const appliedTs = LocalPrefs.get(KEYS.nicknameAdminTs, 0);
-    if(doc.nameSetByAdmin > appliedTs){
-      LocalPrefs.set(KEYS.nickname, doc.name);
-      LocalPrefs.set(KEYS.nicknameLocked, true);
-      LocalPrefs.set(KEYS.nicknameAdminTs, doc.nameSetByAdmin);
-      if(typeof window.onNicknameChangedByAdmin === 'function') window.onNicknameChangedByAdmin(doc.name);
-    }
+    applyAdminNicknameOverride(doc);
+    // резолвим промис только один раз — на самом первом ответе базы,
+    // дальше это уже "живой" слушатель на случай правки ника, пока
+    // игрок на сайте (см. комментарий выше)
+    if(first){ first = false; _resolveNicknameReady(); }
   });
+  // подстраховка: если по какой-то причине база вообще не ответит
+  // (ошибка/нет прав), не даём играм зависнуть в ожидании этого промиса
+  // навсегда — через 3с считаем, что применять было нечего
+  setTimeout(()=>{ if(first){ first = false; _resolveNicknameReady(); } }, 3000);
 }
 if(document.readyState !== 'loading') watchAdminNicknameOverride();
 else document.addEventListener('DOMContentLoaded', watchAdminNicknameOverride);
