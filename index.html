@@ -94,7 +94,7 @@
       <div class="menu-buttons">
         <button class="btn btn-primary" id="playBtn">▶ Начать играть</button>
         <button class="btn btn-secondary" id="recordsBtn">🏆 Рекорды</button>
-        <button class="btn btn-secondary" id="settingsBtn">⚙ Настройки</button>
+        <button class="btn btn-secondary" id="settingsBtn" data-open-settings>⚙ Настройки</button>
       </div>
       <p class="hint">Двигай ртом пальцем, мышкой или стрелками ← →</p>
     </div>
@@ -287,7 +287,7 @@
         <button class="btn btn-secondary" id="snakeRecordsBtn">🏆 Рекорды</button>
         <button class="btn btn-secondary" id="snakeProfileBtn">🏅 Профиль и достижения</button>
       </div>
-      <p class="hint">На телефоне — веди пальцем по полю и жми кнопку ускорения слева снизу. На компьютере — веди мышкой, ЛКМ — ускорение.</p>
+      <p class="hint">На телефоне веди пальцем как мышкой: куда палец на экране — туда едет змейка. Ускорение — кнопка слева снизу. На ПК — мышь, ЛКМ ускоряет.</p>
     </div>
   </section>
 
@@ -403,25 +403,12 @@
         </div>
       </div>
 
-      <h2 style="margin-top:18px;font-size:1.05rem;text-align:center;">Управление</h2>
-      <div class="game-pick-grid" id="doodleControlModeRow" style="margin-top:8px;">
-        <button class="game-pick" id="doodleControlTiltBtn" data-mode="tilt">
-          <span class="game-pick-emoji">📱</span>
-          <span class="game-pick-name">Акселерометр</span>
-          <span class="game-pick-desc">Наклоняй телефон</span>
-        </button>
-        <button class="game-pick" id="doodleControlButtonsBtn" data-mode="buttons">
-          <span class="game-pick-emoji">👈👉</span>
-          <span class="game-pick-name">Кнопки на экране</span>
-          <span class="game-pick-desc">Тапай слева/справа</span>
-        </button>
-      </div>
-
       <div class="menu-buttons" style="margin-top:16px;">
         <button class="btn btn-primary" id="doodlePlayBtn">▶ Начать играть</button>
         <button class="btn btn-secondary" id="doodleSkinBtn">🎨 Скин персонажа</button>
         <button class="btn btn-secondary" id="doodleRecordsBtn">🏆 Рекорды</button>
         <button class="btn btn-secondary" id="doodleProfileBtn">🏅 Профиль и достижения</button>
+        <button class="btn btn-secondary" id="doodleSettingsBtn" data-open-settings>⚙ Настройки</button>
       </div>
       <p class="hint" id="doodleControlHint">На телефоне двигай пальцем по экрану, на компьютере — стрелки ← → или A/D</p>
     </div>
@@ -573,6 +560,21 @@
       <span>Музыка</span>
       <button class="toggle" id="musicToggle" data-on="true">Вкл</button>
     </div>
+
+    <h2 class="settings-section-title">Doodle-прыжки: управление</h2>
+    <div class="game-pick-grid settings-doodle-controls" id="doodleControlModeRow">
+      <button type="button" class="game-pick" id="doodleControlTiltBtn" data-mode="tilt">
+        <span class="game-pick-emoji">📱</span>
+        <span class="game-pick-name">Акселерометр</span>
+        <span class="game-pick-desc">Наклоняй телефон</span>
+      </button>
+      <button type="button" class="game-pick" id="doodleControlButtonsBtn" data-mode="buttons">
+        <span class="game-pick-emoji">👈👉</span>
+        <span class="game-pick-name">Кнопки на экране</span>
+        <span class="game-pick-desc">Тапай слева/справа</span>
+      </button>
+    </div>
+    <p class="modal-note" id="doodleSettingsHint">Выбор сохраняется на этом устройстве.</p>
 
     <button class="btn btn-primary" id="saveSettingsBtn">Сохранить</button>
   </div>

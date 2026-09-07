@@ -77,7 +77,7 @@ const Doodle = {
   pointerTargetX: null,
 
   /* способ управления: 'tilt' (наклон телефона) или 'buttons' (тап по
-     половинам экрана) — выбирается в меню, хранится на устройстве */
+     половинам экрана) — выбирается в Настройках, хранится на устройстве */
   controlMode: 'tilt',
 
   /* наклон телефона (гироскоп) — управление персонажем */
@@ -190,12 +190,17 @@ const Doodle = {
     const tiltBtn = document.getElementById('doodleControlTiltBtn');
     const btnsBtn = document.getElementById('doodleControlButtonsBtn');
     const hint = document.getElementById('doodleControlHint');
+    const settingsHint = document.getElementById('doodleSettingsHint');
     if(tiltBtn) tiltBtn.classList.toggle('active', this.controlMode === 'tilt');
     if(btnsBtn) btnsBtn.classList.toggle('active', this.controlMode === 'buttons');
-    if(hint){
-      hint.textContent = this.controlMode === 'buttons'
-        ? 'Держи палец в левой половине экрана — прыгун идёт налево, в правой — направо'
-        : 'Наклоняй телефон влево/вправо, на компьютере — стрелки ← → или A/D';
+    const hintText = this.controlMode === 'buttons'
+      ? 'Держи палец в левой половине экрана — прыгун идёт налево, в правой — направо'
+      : 'Наклоняй телефон влево/вправо, на компьютере — стрелки ← → или A/D';
+    if(hint) hint.textContent = hintText;
+    if(settingsHint){
+      settingsHint.textContent = this.controlMode === 'buttons'
+        ? 'Кнопки: палец слева — налево, справа — направо. Сохраняется на этом устройстве.'
+        : 'Акселерометр: наклоняй телефон. На ПК — стрелки ← → или A/D. Сохраняется на этом устройстве.';
     }
   },
   setControlMode(mode){

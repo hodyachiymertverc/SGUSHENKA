@@ -1,8 +1,9 @@
 /* =========================================================
    ЗМЕЙКА (.io-стиль) — как в slither.io/worm-io:
      - непрерывное движение, змейка растёт, поедая частицы;
-     - управление на ПК — мышкой (направление) + ЛКМ (ускорение),
-       на телефоне — пальцем по полю + отдельная кнопка ускорения;
+     - управление — Pointer Events: палец и мышь задают направление
+       одинаково (вектор от центра экрана к курсору/пальцу), на ПК
+       ЛКМ — ускорение, на телефоне — отдельная кнопка ускорения;
      - 3 уровня сложности против ботов (лёгкий/средний/сложный) —
        отличаются числом ботов, их скоростью и агрессией;
      - онлайн-режим: комната создаётся автоматически (или по коду),
@@ -45,7 +46,7 @@ SNAKE_PARTICLE_SRCS.forEach(src=>{
 const SNAKE_WORLD = 6000;                 // сторона квадратного мира (карта увеличена)
 const SNAKE_BASE_SPEED = 150;             // мировых единиц/сек
 const SNAKE_BOOST_SPEED = 270;
-const SNAKE_TURN_RATE = 3.4;              // рад/сек — как быстро игрок поворачивает
+const SNAKE_TURN_RATE = 5.2;              // рад/сек — поворот к курсору/пальцу (без «вязкого» джойстика)
 const SNAKE_BASE_LEN = 90;
 const SNAKE_MIN_LEN = 60;
 const SNAKE_GROW_PER_POINT = 15;
@@ -1793,68 +1794,77 @@ const Snake = {
       });
     });
 
-    /* ---------------- управление ---------------- */
+    /* ---------------- управление (Pointer Events) ----------------
+       Один и тот же код для мыши и пальца: направление = вектор от
+       центра поля к указателю. Это тот же закон, что у мыши в slither.io,
+       без виртуального джойстика (он давал задержку и «ступеньки»).
+       getCoalescedEvents() подхватывает промежуточные точки тача между
+       кадрами — на телефоне траектория такая же плотная, как mousemove. */
     const canvas = document.getElementById('snakeCanvas');
-    if(canvas){
+    const wrap = document.getElementById('snakeGameWrap') || canvas;
+    if(canvas && wrap){
+      const AIM_DEADZONE2 = 16; // 4px, как у мыши — не сбивать курс тапом в центре
+      let aimPointerId = null;
+
       const setAngleFromClient = (clientX, clientY)=>{
         const rect = canvas.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-        const dx = clientX - cx, dy = clientY - cy;
-        if(Math.abs(dx) > 4 || Math.abs(dy) > 4) this.desiredAngle = Math.atan2(dy, dx);
+        const dx = clientX - (rect.left + rect.width / 2);
+        const dy = clientY - (rect.top + rect.height / 2);
+        if(dx * dx + dy * dy > AIM_DEADZONE2) this.desiredAngle = Math.atan2(dy, dx);
       };
 
-      // ПК — мышка задаёт направление от центра экрана, ЛКМ — ускорение
-      canvas.addEventListener('mousemove', e=> setAngleFromClient(e.clientX, e.clientY));
-      canvas.addEventListener('mousedown', e=>{ if(e.button === 0) this.inputBoost = true; });
-      window.addEventListener('mouseup', ()=>{ this.inputBoost = false; });
+      const isHudButton = (el)=> !!(el && el.closest && el.closest('button'));
 
-      // телефон — невидимый КРУГОВОЙ джойстик в любой точке экрана:
-      // палец сам становится центром управления там, где коснулся поля
-      // (а не привязан к центру экрана и не к какой-то одной
-      // фиксированной зоне), поэтому направление можно полностью менять
-      // на месте, без необходимости тянуть палец через всё поле. Пока
-      // палец не сдвинулся дальше маленькой мёртвой зоны — направление
-      // не меняется (чтобы случайные дрожания при тапе не сбивали курс).
-      //
-      // Слушатели теперь висят на всей обёртке поля (.game-wrap), а не
-      // только на canvas — раньше при неточном совпадении размеров
-      // canvas и обёртки (округления при подгонке под экран) в паре
-      // пикселей по краям касание могло "провалиться" мимо джойстика.
-      // Реальные кнопки (пауза/выход/ускорение) при этом по-прежнему
-      // работают как обычно — касания по ним не трогают джойстик.
-      const wrap = document.getElementById('snakeGameWrap') || canvas;
-      const JOY_DEADZONE = 10;
-      let joyOriginX = 0, joyOriginY = 0, joyActive = false;
+      const applyPointer = (e)=>{
+        if(typeof e.getCoalescedEvents === 'function'){
+          const pts = e.getCoalescedEvents();
+          if(pts && pts.length){
+            for(let i = 0; i < pts.length; i++) setAngleFromClient(pts[i].clientX, pts[i].clientY);
+            return;
+          }
+        }
+        setAngleFromClient(e.clientX, e.clientY);
+      };
 
-      wrap.addEventListener('touchstart', e=>{
-        const t = e.touches[0];
-        if(!t) return;
-        if(e.target && e.target.closest && e.target.closest('button')) return; // не мешаем кнопкам
-        joyOriginX = t.clientX; joyOriginY = t.clientY;
-        joyActive = true;
-      }, { passive: true });
-
-      wrap.addEventListener('touchmove', e=>{
-        const t = e.touches[0];
-        if(!joyActive || !t) return;
+      const onPointerDown = (e)=>{
+        if(isHudButton(e.target)) return;
+        if(aimPointerId !== null && e.pointerId !== aimPointerId) return;
+        aimPointerId = e.pointerId;
+        try{ wrap.setPointerCapture(e.pointerId); }catch(_err){}
+        applyPointer(e);
+        if(e.pointerType === 'mouse' && e.button === 0) this.inputBoost = true;
         e.preventDefault();
-        const dx = t.clientX - joyOriginX, dy = t.clientY - joyOriginY;
-        const dist = Math.hypot(dx, dy);
-        if(dist < JOY_DEADZONE) return;
-        this.desiredAngle = Math.atan2(dy, dx);
-        // сдвигаем "центр джойстика" к точке чуть позади пальца по
-        // направлению движения — так, если палец продолжает ехать в
-        // одну сторону, зона нечувствительности не мешает вести змейку
-        // дальше, а лёгкое изменение направления пальца тут же
-        // поворачивает змейку, не требуя оторвать палец и коснуться заново
-        const keep = JOY_DEADZONE / dist;
-        joyOriginX = t.clientX - dx * keep;
-        joyOriginY = t.clientY - dy * keep;
-      }, { passive: false });
+      };
 
-      const endJoystick = ()=>{ joyActive = false; };
-      wrap.addEventListener('touchend', endJoystick);
-      wrap.addEventListener('touchcancel', endJoystick);
+      const onPointerMove = (e)=>{
+        if(isHudButton(e.target) && aimPointerId === null) return;
+        if(aimPointerId !== null && e.pointerId !== aimPointerId) return;
+        if(e.pointerType === 'mouse' || aimPointerId === e.pointerId){
+          applyPointer(e);
+          e.preventDefault();
+        }
+      };
+
+      const onPointerUp = (e)=>{
+        if(e.pointerId !== aimPointerId){
+          if(e.pointerType === 'mouse' && e.button === 0) this.inputBoost = false;
+          return;
+        }
+        applyPointer(e);
+        if(e.pointerType === 'mouse') this.inputBoost = false;
+        aimPointerId = null;
+      };
+
+      const ptrOpts = { passive: false };
+      wrap.addEventListener('pointerdown', onPointerDown, ptrOpts);
+      wrap.addEventListener('pointermove', onPointerMove, ptrOpts);
+      wrap.addEventListener('pointerup', onPointerUp, ptrOpts);
+      wrap.addEventListener('pointercancel', onPointerUp, ptrOpts);
+      wrap.addEventListener('lostpointercapture', ()=>{ aimPointerId = null; });
+      // Chrome: сырые апдейты указателя между rAF — ещё ближе к мыши
+      wrap.addEventListener('pointerrawupdate', (e)=>{
+        if(aimPointerId !== null && e.pointerId === aimPointerId) applyPointer(e);
+      });
     }
 
     // отдельная кнопка ускорения слева снизу — для телефона
