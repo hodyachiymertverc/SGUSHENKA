@@ -215,15 +215,144 @@ interface LeaderboardEntry { id: string; name: string; score: number; isMe?: boo
 /* =========================================================
    ОБЪЕКТ ИГРЫ
 ========================================================= */
-// маленький типовой помощник: говорит компилятору, что `this` внутри
-// каждого метода объекта — это ТОЧНО ТАКОЙ ЖЕ объект целиком (включая
-// все остальные методы и поля), а не какой-то отдельно выводимый тип.
-// Без этого при таком количестве методов в одном литерале TypeScript
-// иногда не может самостоятельно "закольцевать" вывод типа `this` и
-// откатывается к unknown — ThisType устраняет эту неоднозначность.
-function defineSnakeGame<T>(game: T & ThisType<T>): T { return game; }
+// Полный интерфейс игры — ЯВНО описывает форму объекта Snake (все поля
+// и сигнатуры всех методов). Раньше вместо этого использовался приём
+// с generic-помощником и ThisType<T> (компилятор сам выводил тип этого
+// же объекта для `this` внутри его методов) — на TypeScript 6.0.3 это
+// компилировалось чисто, но на версии из package.json (^5.6.0), которую
+// реально ставит CI, вывод типа для `this` в такой самоссылающейся
+// generic-конструкции на объекте с ~85 методами не срабатывал и `this`
+// внутри методов схлопывался в `unknown` (см. ошибки сборки в Actions).
+// Явный интерфейс + `const Snake: SnakeGame = {...}` не зависит от этой
+// эвристики вывода типов вообще — контекстная типизация `this` для
+// object-literal, присвоенного переменной с явным типом, поддерживается
+// одинаково во всех современных версиях компилятора.
+interface SnakeGame {
+  playerId: string | null;
+  data: PlayerData;
+  levels: LevelDef[];
+  achievements: AchievementDef[];
+  skins: SkinDef[];
+  imageSkins: ImageSkinDef[];
+  _ready: boolean;
+  _recordsSubscribed: boolean;
+  _loopBound: ((now: number) => void) | null;
 
-const Snake = defineSnakeGame({
+  mode: SnakeMode;
+  difficulty: SnakeDifficulty;
+  running: boolean;
+  paused: boolean;
+
+  desiredAngle: number;
+  inputBoost: boolean;
+
+  player: SnakeEntity | null;
+  bots: SnakeEntity[];
+  food: FoodItem[];
+  score: number;
+  foodEatenUnits: number;
+  camZoom: number | null;
+
+  roomId: string | null;
+  peers: Record<string, SnakeEntity>;
+  _unsubOnlinePlayers: (() => void) | null;
+  _unsubRoomsList: (() => void) | null;
+  _pingInterval: ReturnType<typeof setInterval> | null;
+
+  _lastTime: number;
+  _lbAcc: number;
+  _onlineSyncAcc: number;
+  _skinImageCache: Record<string, HTMLImageElement>;
+  _skinCircleCache: Record<string, HTMLCanvasElement>;
+
+  init(): void;
+  getLevelForCaught(v: number): LevelDef | null;
+  getNextLevel(v: number): LevelDef | null;
+  checkAchievements(): void;
+  isSkinUnlocked(skin: SkinDef | ImageSkinDef | null | undefined): boolean;
+  allColorSkinsUnlocked(): boolean;
+  openSkinModal(): void;
+  renderSkinModal(): void;
+  renderSkinColorGrid(): void;
+  renderSkinImageGrid(): void;
+  selectSkin(sel: { type: string; id?: string }): void;
+  addCustomColorInput(): void;
+  fillCustomColorInputs(): void;
+  openCustomEditor(): void;
+  saveCustomSkin(): void;
+  resolvePlayerSkin(): SkinSelection;
+  collectionFor(diff: SnakeDifficulty): string;
+  submitScore(diff: SnakeDifficulty, score: number): void;
+  recordGameEnd(diff: SnakeDifficulty, score: number, caughtThisGame: number): void;
+  renderMenuUI(): void;
+  renderProfileUI(): void;
+  openRecords(): void;
+  renderRecordsList(elId: string, list: any[]): void;
+  colorFor(seed: unknown): string;
+  paletteFor(seed: unknown): string[];
+  skinColorsFor(s: SnakeEntity): string[];
+  genRoomCode(): string;
+  makeSnake(id: string, name: string, isPlayer: boolean, isBot: boolean, diffKey: SnakeDifficulty | null): SnakeEntity;
+  makeBot(diffKey: SnakeDifficulty): SnakeEntity;
+  collisionRadius(s: SnakeEntity): number;
+  collisionRadiusForRender(s: SnakeEntity): number;
+  visibleSpanTrail(s: SnakeEntity): Vec2[];
+  visibleSpanTrailForRender(s: SnakeEntity): Vec2[];
+  bodyHit(px: number, py: number, trail: Vec2[] | undefined, radius: number): boolean;
+  startGame(diffKey: SnakeDifficulty): void;
+  resetWorld(diffKey: SnakeDifficulty): void;
+  beginLoop(): void;
+  openOnlineModal(): void;
+  watchOpenRooms(): void;
+  stopWatchingOpenRooms(): void;
+  renderOpenRoomsList(list: RoomListItem[]): void;
+  joinSpecificRoom(code: string): void;
+  genUniqueRoomCode(): Promise<string>;
+  matchmake(): void;
+  joinRoomByCode(): void;
+  registerInRoom(code: string): void;
+  handleOnlinePlayersUpdate(list: any[]): void;
+  updatePeersMotion(dt: number): void;
+  cancelOnlineSearch(): void;
+  leaveOnlineRoom(keepModalOpen?: boolean): void;
+  startOnlineGame(): void;
+  updateOnlineSync(dt: number): void;
+  fitCanvas(): void;
+  resizeCanvasBuffer(): void;
+  loop(now: number): void;
+  update(dt: number): void;
+  stepSnake(s: SnakeEntity, dt: number): void;
+  updateBotAI(dt: number): void;
+  botLookaheadDanger(b: SnakeEntity, allObstacles: SnakeEntity[]): DangerInfo | null;
+  findNearest(self: SnakeEntity, sight: number, predicate: (other: SnakeEntity) => boolean): SnakeEntity | null;
+  updateBotRespawns(dt: number): void;
+  randomFoodPoint(): Vec2;
+  randomFood(big: boolean): FoodItem;
+  spawnFoodBurst(s: SnakeEntity): void;
+  updateFood(): void;
+  trySnakeEat(s: SnakeEntity): void;
+  killSnake(s: SnakeEntity, reason: string): void;
+  checkCollisions(): void;
+  updateCamera(): void;
+  endGame(reason: string): void;
+  render(): void;
+  drawBackgroundPattern(ctx: CanvasRenderingContext2D, camX: number, camY: number, w: number, h: number, zoom: number): void;
+  drawFood(ctx: CanvasRenderingContext2D, f: FoodItem): void;
+  drawSnakeBody(ctx: CanvasRenderingContext2D, s: SnakeEntity): void;
+  getSkinImage(src: string | null | undefined): HTMLImageElement | null;
+  getSkinCircleSprite(src: string | null | undefined, diameter: number): HTMLCanvasElement | null;
+  drawSnakeBodyImage(ctx: CanvasRenderingContext2D, s: SnakeEntity, pts: Vec2[], r: number): void;
+  drawSnakeEyes(ctx: CanvasRenderingContext2D, s: SnakeEntity, r: number): void;
+  drawSnakeBandBody(ctx: CanvasRenderingContext2D, s: SnakeEntity, pts: Vec2[], r: number): void;
+  drawNicknames(ctx: CanvasRenderingContext2D, camX: number, camY: number, w: number, h: number, zoom: number): void;
+  renderLeaderboard(): void;
+  goToMenu(): void;
+  startPingTimer(): void;
+  stopPingTimer(): void;
+  bindUI(): void;
+}
+
+const Snake: SnakeGame = {
   playerId: null as string | null,
   data: {
     totalCaught: 0, gamesPlayed: 0, bestEasy: 0, bestMedium: 0, bestHard: 0, bestOnline: 0, unlocked: {}
@@ -936,9 +1065,17 @@ const Snake = defineSnakeGame({
     if(spinner) snakeHide(spinner);
 
     if(!hasCloudDB()) return;
+    // публикуем и выбранный скин игрока — раньше сюда попадали только
+    // позиция/цвет-заглушка (color, вычисленный по id — это лишь
+    // стабильный fallback), из-за чего у соперников в онлайне змейка
+    // всегда рисовалась случайной по id раскраской вместо ФАКТИЧЕСКИ
+    // выбранного игроком скина: цветного/кастомного/картиночного.
+    // Публикуем один раз при входе в комнату (не на каждый тик синхронизации
+    // позиции) — скин не меняется посреди партии, а сама картинка скина
+    // может быть увесистой (base64), незачем гонять её по сети 6+ раз в секунду.
     DB.addItemWithId('snakeOnlinePlayers', this.playerId as string, {
       roomId: code, name: getNickname(), x: 0, y: 0, angle: 0, len: SNAKE_BASE_LEN,
-      score: 0, color: this.colorFor(this.playerId), alive: false, ts: Date.now()
+      score: 0, color: this.colorFor(this.playerId), skin: this.resolvePlayerSkin(), alive: false, ts: Date.now()
     });
     if(this._unsubOnlinePlayers) this._unsubOnlinePlayers();
     this._unsubOnlinePlayers = DB.watchCollection('snakeOnlinePlayers', list=> this.handleOnlinePlayersUpdate(list));
@@ -967,7 +1104,15 @@ const Snake = defineSnakeGame({
       const prevAngle = isNew ? (doc.angle || 0) : peer.angle;
       Object.assign(peer, {
         name: doc.name, len: doc.len || SNAKE_BASE_LEN, score: doc.score || 0,
-        color: doc.color || this.colorFor(doc.id), alive: !!doc.alive
+        color: doc.color || this.colorFor(doc.id),
+        // раньше skin у peer вообще не заполнялся — drawSnakeBody/
+        // skinColorsFor тогда всегда уходили в fallback "случайного" по
+        // id набора цветов, и соперники видели чужую змейку НЕ такой,
+        // какой её видит сам игрок (и картиночные скины не отображались
+        // вовсе, потому что peer.skin.type никогда не было 'image').
+        // Публикуется он один раз при входе в комнату (см. registerInRoom).
+        skin: doc.skin || peer.skin,
+        alive: !!doc.alive
       });
       // не дёргаем позицию сразу на новое значение — вместо этого плавно
       // подъезжаем к ней в updatePeersMotion() на каждом кадре. Раньше
@@ -2043,7 +2188,7 @@ const Snake = defineSnakeGame({
     window.addEventListener('orientationchange', ()=> setTimeout(()=> this.fitCanvas(), 200));
     if(window.visualViewport) window.visualViewport.addEventListener('resize', ()=> this.fitCanvas());
   }
-});
+};
 
 // делаем Snake доступным как window.Snake — иначе `if(window.Snake)`
 // в script.js всегда ложно (top-level const не создаёт window-свойство).

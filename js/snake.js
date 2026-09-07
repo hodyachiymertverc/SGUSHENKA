@@ -117,17 +117,7 @@ function snakeHashSeed(seed) {
         h = (h * 31 + str.charCodeAt(i)) >>> 0;
     return h;
 }
-/* =========================================================
-   ОБЪЕКТ ИГРЫ
-========================================================= */
-// маленький типовой помощник: говорит компилятору, что `this` внутри
-// каждого метода объекта — это ТОЧНО ТАКОЙ ЖЕ объект целиком (включая
-// все остальные методы и поля), а не какой-то отдельно выводимый тип.
-// Без этого при таком количестве методов в одном литерале TypeScript
-// иногда не может самостоятельно "закольцевать" вывод типа `this` и
-// откатывается к unknown — ThisType устраняет эту неоднозначность.
-function defineSnakeGame(game) { return game; }
-const Snake = defineSnakeGame({
+const Snake = {
     playerId: null,
     data: {
         totalCaught: 0, gamesPlayed: 0, bestEasy: 0, bestMedium: 0, bestHard: 0, bestOnline: 0, unlocked: {}
@@ -885,9 +875,17 @@ const Snake = defineSnakeGame({
             snakeHide(spinner);
         if (!hasCloudDB())
             return;
+        // публикуем и выбранный скин игрока — раньше сюда попадали только
+        // позиция/цвет-заглушка (color, вычисленный по id — это лишь
+        // стабильный fallback), из-за чего у соперников в онлайне змейка
+        // всегда рисовалась случайной по id раскраской вместо ФАКТИЧЕСКИ
+        // выбранного игроком скина: цветного/кастомного/картиночного.
+        // Публикуем один раз при входе в комнату (не на каждый тик синхронизации
+        // позиции) — скин не меняется посреди партии, а сама картинка скина
+        // может быть увесистой (base64), незачем гонять её по сети 6+ раз в секунду.
         DB.addItemWithId('snakeOnlinePlayers', this.playerId, {
             roomId: code, name: getNickname(), x: 0, y: 0, angle: 0, len: SNAKE_BASE_LEN,
-            score: 0, color: this.colorFor(this.playerId), alive: false, ts: Date.now()
+            score: 0, color: this.colorFor(this.playerId), skin: this.resolvePlayerSkin(), alive: false, ts: Date.now()
         });
         if (this._unsubOnlinePlayers)
             this._unsubOnlinePlayers();
@@ -924,7 +922,15 @@ const Snake = defineSnakeGame({
             const prevAngle = isNew ? (doc.angle || 0) : peer.angle;
             Object.assign(peer, {
                 name: doc.name, len: doc.len || SNAKE_BASE_LEN, score: doc.score || 0,
-                color: doc.color || this.colorFor(doc.id), alive: !!doc.alive
+                color: doc.color || this.colorFor(doc.id),
+                // раньше skin у peer вообще не заполнялся — drawSnakeBody/
+                // skinColorsFor тогда всегда уходили в fallback "случайного" по
+                // id набора цветов, и соперники видели чужую змейку НЕ такой,
+                // какой её видит сам игрок (и картиночные скины не отображались
+                // вовсе, потому что peer.skin.type никогда не было 'image').
+                // Публикуется он один раз при входе в комнату (см. registerInRoom).
+                skin: doc.skin || peer.skin,
+                alive: !!doc.alive
             });
             // не дёргаем позицию сразу на новое значение — вместо этого плавно
             // подъезжаем к ней в updatePeersMotion() на каждом кадре. Раньше
@@ -2099,7 +2105,7 @@ const Snake = defineSnakeGame({
         if (window.visualViewport)
             window.visualViewport.addEventListener('resize', () => this.fitCanvas());
     }
-});
+};
 // делаем Snake доступным как window.Snake — иначе `if(window.Snake)`
 // в script.js всегда ложно (top-level const не создаёт window-свойство).
 window.Snake = Snake;

@@ -165,7 +165,7 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 
 /* Оверлеи */
 .overlay{
-  position:absolute; inset:0; border-radius:22px;
+  position:absolute; inset:0; border-radius:22px; z-index:10;
   background: rgba(94,58,26,0.55);
   display:flex; align-items:center; justify-content:center;
   padding: 16px;
