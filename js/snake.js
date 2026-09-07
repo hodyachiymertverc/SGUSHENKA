@@ -1068,6 +1068,21 @@ const Snake = {
             scoreEl.textContent = '0';
         this.player = this.makeSnake(this.playerId, getNickname(), true, false, null);
         this.player.skin = this.resolvePlayerSkin();
+        // скин/имя/цвет уже публиковались один раз при входе в комнату
+        // (см. registerInRoom), но на тот момент собственные данные игрока
+        // (this.data, список скинов) иногда ещё не успевали подгрузиться из
+        // облака — тогда resolvePlayerSkin() возвращал временный "случайный"
+        // фолбэк вместо реально выбранного скина, и эта неверная запись
+        // навсегда "залипала" у соперников (обновлялась-то только позиция,
+        // см. updateOnlineSync). К моменту реального старта партии данные
+        // уже гарантированно загружены, поэтому публикуем актуальный скин
+        // ещё раз — так соперники увидят именно тот скин/цвет, который
+        // видит сам игрок, а не случайный по id.
+        if (hasCloudDB() && this.roomId) {
+            DB.setItem('snakeOnlinePlayers', this.playerId, {
+                name: getNickname(), color: this.colorFor(this.playerId), skin: this.player.skin
+            });
+        }
         this.desiredAngle = this.player.angle;
         this.inputBoost = false;
         this.camZoom = 1;
@@ -1838,7 +1853,7 @@ const Snake = {
             const sy = (s.y - camY) * zoom + h / 2 - this.collisionRadius(s) * zoom - 10;
             if (sx < -60 || sx > w + 60 || sy < -30 || sy > h + 30)
                 return;
-            const label = (s.isPlayer ? getNickname() + ' (Вы)' : s.name) || 'Игрок';
+            const label = (s.isPlayer ? 'Вы' : s.name) || 'Игрок';
             ctx.lineWidth = 3;
             ctx.strokeStyle = 'rgba(0,0,0,0.6)';
             ctx.strokeText(label, sx, sy);
@@ -1850,7 +1865,7 @@ const Snake = {
     renderLeaderboard() {
         if (!this.player)
             return;
-        const entries = [{ id: 'me', name: getNickname() + ' (Вы)', score: this.score || 0, isMe: true }];
+        const entries = [{ id: 'me', name: 'Вы', score: this.score || 0, isMe: true }];
         this.bots.forEach(b => entries.push({ id: b.id, name: b.name, score: b.score || 0 }));
         if (this.mode === 'online') {
             this.peerList().forEach(peer => entries.push({ id: peer.id, name: peer.name || 'Игрок', score: peer.score || 0 }));
