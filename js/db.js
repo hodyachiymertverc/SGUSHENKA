@@ -177,6 +177,26 @@ const DB = {
       if(item){ Object.assign(item, patch); this._localSet('gd_records', list); this._notify('records'); }
     }
   },
+  // переименовать игрока (по playerId) в таблице рекордов основной игры —
+  // используется из renamePlayerEverywhere в admin.js. addRecord() выше
+  // намеренно НЕ трогает имя при обновлении рекорда (см. комментарий над
+  // ним), поэтому старый ник в этой таблице сам собой не обновляется —
+  // единственный способ поправить его "везде" — явно найти запись по
+  // playerId и переписать имя, что и делает эта функция.
+  renameInRecordsByPlayerId(playerId, newName){
+    if(this.cloud){
+      this.rtdb.ref('records').orderByChild('playerId').equalTo(playerId).once('value').then(snap=>{
+        const updates = {};
+        snap.forEach(child=>{ updates[child.key + '/name'] = newName; return false; });
+        if(Object.keys(updates).length) this.rtdb.ref('records').update(updates).catch(err=> console.warn(err));
+      }).catch(err=> console.warn('renameInRecordsByPlayerId error', err));
+    } else {
+      const list = this._localGet('gd_records', []);
+      let changed = false;
+      list.forEach(r=>{ if(r.playerId === playerId){ r.name = newName; changed = true; } });
+      if(changed){ this._localSet('gd_records', list); this._notify('records'); }
+    }
+  },
 
   /* =========================================================
      РЕКОРДЫ (ОБОБЩЁННАЯ ВЕРСИЯ) — то же самое, что addRecord/
@@ -276,6 +296,24 @@ const DB = {
     } else {
       this._localSet(this._recLocalKey(name), []);
       this._notifyRecordsIn(name);
+    }
+  },
+  // переименовать игрока (по playerId) в отдельной таблице рекордов
+  // (snakeRecordsEasy/doodleRecords/tttRecords/…) — та же причина, что и
+  // у renameInRecordsByPlayerId выше: addRecordIn() намеренно не трогает
+  // имя при обновлении рекорда, поэтому старый ник сам не обновится.
+  renameInRecordsInByPlayerId(name, playerId, newName){
+    if(this.cloud){
+      this.rtdb.ref(name).orderByChild('playerId').equalTo(playerId).once('value').then(snap=>{
+        const updates = {};
+        snap.forEach(child=>{ updates[child.key + '/name'] = newName; return false; });
+        if(Object.keys(updates).length) this.rtdb.ref(name).update(updates).catch(err=> console.warn(err));
+      }).catch(err=> console.warn('renameInRecordsInByPlayerId error', err));
+    } else {
+      const list = this._localGet(this._recLocalKey(name), []);
+      let changed = false;
+      list.forEach(r=>{ if(r.playerId === playerId){ r.name = newName; changed = true; } });
+      if(changed){ this._localSet(this._recLocalKey(name), list); this._notifyRecordsIn(name); }
     }
   },
   updateRecordNameIn(name, id, newName){

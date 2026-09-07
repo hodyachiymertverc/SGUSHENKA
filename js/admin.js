@@ -1147,11 +1147,14 @@ function mountClickerPlayers(){
 // "аккаунта" с паролем на сайте нет), поэтому изменение здесь работает
 // так: (1) сразу переписывается ник во всех игровых коллекциях, где он
 // уже встречался у этого id — это то, что видят ДРУГИЕ игроки (списки
-// онлайн, и т.п.); (2) в 'profiles/<id>' дополнительно ставится метка
-// nameSetByAdmin с текущим временем — специальный "живой" наблюдатель в
-// player.js подхватывает эту метку и переносит новый ник в localStorage
-// САМОГО игрока, пока тот на сайте (через постоянное соединение с
-// базой) — либо при следующем заходе, если он был офлайн.
+// онлайн, и т.п.); (1.5) отдельно переписывается имя в найденной записи
+// playerId во ВСЕХ таблицах рекордов (см. renamePlayerEverywhere ниже) —
+// иначе старый ник так и оставался бы в списках лидеров; (2) в
+// 'profiles/<id>' дополнительно ставится метка nameSetByAdmin с текущим
+// временем — специальный "живой" наблюдатель в player.js подхватывает
+// эту метку и переносит новый ник в localStorage САМОГО игрока, пока тот
+// на сайте (через постоянное соединение с базой) — либо при следующем
+// заходе, если он был офлайн.
 // Никнейм, который игрок меняет ВНУТРИ отдельной игры (если там есть
 // такая возможность), эту функцию не затрагивает и остаётся только в
 // этой игре — как и просили.
@@ -1160,7 +1163,7 @@ function mountAllPlayers(){
   const searchEl = document.getElementById('allPlayersSearch');
   if(!listEl || !window.DB) return;
 
-  const sources = ['profiles', 'clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers'];
+  const sources = ['profiles', 'clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers'];
   const latestByCollection = {};
   let merged = {};
 
@@ -1236,6 +1239,21 @@ function mountAllPlayers(){
   if(searchEl) searchEl.addEventListener('input', render);
 }
 
+// таблицы рекордов хранят записи под своим собственным (не совпадающим с
+// id игрока) ключом и ищутся по полю playerId внутри записи — обычная
+// игра (addRecord/addRecordIn) намеренно не трогает имя при обновлении
+// рекорда (чтобы не затирать правку из админки следующей же игрой), а
+// значит и наоборот: сама по себе смена ника в профиле старую запись в
+// этих таблицах не поправит. Поэтому при переименовании "везде" отдельно
+// проходимся по каждой известной таблице рекордов и переписываем имя в
+// найденной (если есть) записи этого playerId — не только в профильных
+// коллекциях типа snakePlayers/doodlePlayers.
+const ALL_RECORD_COLLECTIONS = [
+  'doodleRecords',
+  'snakeClassicRecordsEasy', 'snakeClassicRecordsHard',
+  'snakeRecordsEasy', 'snakeRecordsMedium', 'snakeRecordsHard', 'snakeRecordsOnline',
+  'tttRecords'
+];
 function renamePlayerEverywhere(id, newName, seenIn){
   const ts = Date.now();
   const cols = new Set(seenIn || []);
@@ -1245,7 +1263,13 @@ function renamePlayerEverywhere(id, newName, seenIn){
     if(col === 'profiles') patch.nameSetByAdmin = ts;
     DB.setItem(col, id, patch);
   });
+  // таблица рекордов основной игры ("Лови сгущёнку") — отдельная коллекция
+  // 'records' со своей схемой (updateRecordName/renameInRecordsByPlayerId)
+  DB.renameInRecordsByPlayerId(id, newName);
+  // и все остальные таблицы рекордов (змейка, Doodle, крестики-нолики…)
+  ALL_RECORD_COLLECTIONS.forEach(col=> DB.renameInRecordsInByPlayerId(col, id, newName));
 }
+
 
 /* =========================================================
    ВКЛАДКИ ПО ИГРАМ
