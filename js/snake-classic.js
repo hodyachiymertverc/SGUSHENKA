@@ -244,8 +244,15 @@ const SnakeClassic = {
     const wrapTop = wrap.getBoundingClientRect().top;
     const mainEl = document.querySelector('main');
     const mainPadBottom = mainEl ? (parseFloat(getComputedStyle(mainEl).paddingBottom) || 0) : 0;
+    // у самой обёртки (.snake-wrap) есть свой margin-bottom (12px) —
+    // раньше он никак не учитывался в расчёте, из-за чего доступная
+    // высота считалась на 12px БОЛЬШЕ, чем реально остаётся места на
+    // экране. В итоге низ поля (толстая стенка) вместе с этим отступом
+    // уезжал за пределы видимой области — именно это выглядело как
+    // "нижняя граница поля вылезает". Теперь отступ вычитаем явно.
+    const wrapMarginBottom = parseFloat(getComputedStyle(wrap).marginBottom) || 0;
     const bottomSafety = 8; // небольшой дополнительный запас на всякий случай
-    const available = Math.max(0, vh - wrapTop - mainPadBottom - bottomSafety);
+    const available = Math.max(0, vh - wrapTop - mainPadBottom - wrapMarginBottom - bottomSafety);
     const minHeight = Math.min(220, available || 220);
     const height = Math.max(minHeight, available);
     wrap.style.height = height + 'px';

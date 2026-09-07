@@ -18,7 +18,8 @@ const KEYS = {
   sfx: 'gd_sfx_on',
   music: 'gd_music_on',
   lastSeenNews: 'gd_last_seen_news_ts',
-  votes: 'gd_news_votes'
+  votes: 'gd_news_votes',
+  doodleControlMode: 'gd_doodle_control_mode'
 };
 
 /* уникальный ID этого устройства/игрока — общий для игры, кликера,
@@ -96,4 +97,14 @@ else document.addEventListener('DOMContentLoaded', watchAdminNicknameOverride);
 function isScreenVisible(id){
   const el = document.getElementById(id);
   return !!el && !el.classList.contains('hidden');
+}
+
+/* способ управления в Doodle-прыжках: наклон телефона (акселерометр)
+   или тап по левой/правой половине экрана. Хранится локально на
+   устройстве — это настройка ввода, а не игровая статистика. */
+function getDoodleControlMode(){
+  return LocalPrefs.get(KEYS.doodleControlMode, 'tilt') === 'buttons' ? 'buttons' : 'tilt';
+}
+function setDoodleControlMode(mode){
+  LocalPrefs.set(KEYS.doodleControlMode, mode === 'buttons' ? 'buttons' : 'tilt');
 }

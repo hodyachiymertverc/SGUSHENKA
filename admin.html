@@ -6,7 +6,7 @@
 <title>Админ-панель — Новости</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="css/style.css">
 <style>
   .admin-wrap{ max-width:600px; margin:4vh auto; padding:0 16px 40px; position:relative; z-index:2; }
   .admin-card{ background:var(--white); border-radius:24px; padding:26px 22px; border:4px solid var(--gold); box-shadow:0 12px 0 var(--shadow); margin-top:18px; }
@@ -19,8 +19,8 @@
   .view-btn{ background:var(--white); border:2px solid #EADFC8; }
   .del-btn{ background:#FFDCD6; color:#B23A28; }
   .reaction-edit-row{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
-  .reaction-edit-row label{ display:flex; flex-direction:column; font-size:0.8rem; font-weight:700; flex:1; min-width:70px; }
-  .reaction-edit-row input{ width:100%; padding:8px; border-radius:8px; border:2px solid #EADFC8; margin-top:4px; }
+  .reaction-edit-row label{ display:flex; flex-direction:column; font-size:0.8rem; font-weight:700; flex:1 1 70px; min-width:70px; }
+  .reaction-edit-row input{ width:100%; padding:8px; border-radius:8px; border:2px solid #EADFC8; margin-top:4px; box-sizing:border-box; min-width:0; }
   .save-reactions-btn{ margin-top:10px; width:100%; }
   .status-badge{ display:inline-block; font-size:0.75rem; padding:2px 8px; border-radius:10px; background:#E6F4EA; color:#2C7A3D; margin-bottom:8px; font-weight:700; }
   .status-badge.offline{ background:#FFF1DC; color:#8B5A2B; }
@@ -31,11 +31,20 @@
   details.admin-card summary::-webkit-details-marker{ display:none; }
   details.admin-card summary::before{ content:'▸ '; color:var(--pink); }
   details.admin-card[open] summary::before{ content:'▾ '; }
-  .cfg-form{ background:var(--cream); border-radius:14px; padding:12px; margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap:8px 10px; }
+  .cfg-form{ background:var(--cream); border-radius:14px; padding:12px; margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap:8px 10px; max-width:100%; }
   .cfg-form.hidden{ display:none; }
-  .cfg-form .cfg-field{ display:flex; flex-direction:column; font-size:0.78rem; font-weight:700; }
+  /* по умолчанию у ячеек грид-контейнера min-width:auto, а у <input>
+     есть собственная "внутренняя" минимальная ширина (обычно около
+     170-200px) — из-за этого колонка не могла сжаться уже́, чем этот
+     инпут, и на узких экранах строка вылезала за границу карточки,
+     даже несмотря на grid-template-columns: 1fr 1fr. min-width:0
+     разрешает ячейке (и полям внутри неё) сжиматься до ширины родителя. */
+  .cfg-form .cfg-field{ display:flex; flex-direction:column; font-size:0.78rem; font-weight:700; min-width:0; }
   .cfg-form .cfg-field.wide{ grid-column: 1 / -1; }
-  .cfg-form input, .cfg-form select, .cfg-form textarea{ margin-top:4px; padding:8px; border-radius:8px; border:2px solid #EADFC8; font-family:inherit; font-size:0.9rem; }
+  .cfg-form input, .cfg-form select, .cfg-form textarea{ margin-top:4px; padding:8px; border-radius:8px; border:2px solid #EADFC8; font-family:inherit; font-size:0.9rem; width:100%; min-width:0; box-sizing:border-box; }
+  @media (max-width:520px){
+    .cfg-form{ grid-template-columns: 1fr; }
+  }
   .cfg-form textarea{ min-height:60px; resize:vertical; }
   .cfg-form .cfg-check{ flex-direction:row; align-items:center; gap:6px; }
   .cfg-form-actions{ grid-column: 1 / -1; display:flex; gap:8px; margin-top:4px; }
@@ -325,6 +334,14 @@
         <button class="btn btn-primary btn-small" id="doodleAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
         <div id="doodleAchievementsList" style="margin-top:12px;"></div>
       </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🖼 Скины персонажа</h2></summary>
+        <p class="modal-note">Загружается одна картинка персонажа. Достижение можно не указывать — тогда скин открыт всем сразу. Стандартный скин игры и так есть у всех, здесь редактируются только дополнительные.</p>
+        <div id="doodleSkinsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="doodleSkinsAddBtn" style="margin-top:8px;">+ Добавить скин</button>
+        <div id="doodleSkinsList" style="margin-top:12px;"></div>
+      </details>
     </div>
 
     <!-- ===================== ВКЛАДКА: КРЕСТИКИ-НОЛИКИ ===================== -->
@@ -384,9 +401,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="db.js"></script>
-<script src="defaults.js"></script>
+<script src="js/db.js"></script>
+<script src="js/defaults.js"></script>
 <script src="admin-config.js"></script>
-<script src="admin.js"></script>
+<script src="js/admin.js"></script>
 </body>
 </html>

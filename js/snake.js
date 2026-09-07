@@ -947,10 +947,18 @@ const Snake = {
     const canvas = document.getElementById('snakeCanvas');
     const wrap = document.getElementById('snakeGameWrap');
     if(!screen || !canvas || !wrap || screen.classList.contains('hidden')) return;
-    const topbar = document.querySelector('.topbar');
     const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    const used = (topbar ? topbar.offsetHeight : 0) + 24;
-    const height = Math.max(320, vh - used);
+    // как и в остальных играх — считаем реальную позицию обёртки и
+    // реальные отступы (padding-bottom у <main> и margin-bottom самой
+    // .snake-wrap), а не грубый запас в пикселях, иначе низ поля может
+    // уезжать за пределы видимой области на телефоне.
+    const wrapTop = wrap.getBoundingClientRect().top;
+    const mainEl = document.querySelector('main');
+    const mainPadBottom = mainEl ? (parseFloat(getComputedStyle(mainEl).paddingBottom) || 0) : 0;
+    const wrapMarginBottom = parseFloat(getComputedStyle(wrap).marginBottom) || 0;
+    const bottomSafety = 8;
+    const available = Math.max(0, vh - wrapTop - mainPadBottom - wrapMarginBottom - bottomSafety);
+    const height = Math.max(320, available);
     wrap.style.height = height + 'px';
     canvas.style.height = height + 'px';
     this.resizeCanvasBuffer();
@@ -1458,42 +1466,94 @@ const Snake = {
     }
     return img;
   },
-  // тело "картиночного" скина строится из повторяющихся кусочков одной
-  // и той же картинки-тела (как и просили — "туловище строится из
-  // кусочков"), развёрнутых по направлению движения в каждой точке; поверх
-  // головы змейки рисуется отдельная картинка головы
-  drawSnakeBodyImage(ctx, s, pts, r){
-    const bodyImg = this.getSkinImage(s.skin.bodyImg);
-    const headImg = this.getSkinImage(s.skin.headImg);
-    const tileSize = r * 2.15;
+  // тело "картиночного" скина строится из круглых (не овальных!)
+  // повторяющихся отпечатков одной и той же картинки, каждый из
+  // которых накладывается на предыдущий ровно наполовину диаметра —
+  // как попросили: "круг должен накладываться на другой круг наполовину".
+  //
+  // Раньше кусочек рисовался КВАДРАТНОЙ картинкой, повёрнутой по углу
+  // движения (ctx.rotate). Если загруженное изображение само по себе не
+  // было симметричным квадратом (а таким обычно и является обычное
+  // загруженное фото/картинка), при движении змейки строго вправо
+  // (угол 0) оно рисовалось как есть — и любое изображение, задуманное
+  // "смотрящим вверх", в этот момент выглядело "повёрнутым набок". Плюс
+  // сама картинка decode/масштабировалась заново на каждый кадр — при
+  // крупных исходных файлах это и давало "дёрганость".
+  //
+  // Исправление: обрезаем картинку по кругу и кэшируем этот уже готовый
+  // маленький круглый спрайт ОДИН РАЗ на офскрин-канвасе — дальше просто
+  // штампуем его без поворота и без пересчёта на каждый кадр. Круг
+  // выглядит одинаково с любой стороны, поэтому "бока" больше не будет
+  // в принципе, а форма всегда остаётся именно кругом, а не овалом.
+  getSkinCircleSprite(src, diameter){
+    if(!src || !diameter) return null;
+    const img = this.getSkinImage(src);
+    if(!img || !img.complete || !img.naturalWidth) return null;
+    if(!this._skinCircleCache) this._skinCircleCache = {};
+    // округляем диаметр до шага в 2px, чтобы не плодить спрайт заново
+    // на каждое крохотное изменение радиуса змейки при росте
+    const size = Math.max(4, Math.round(diameter / 2) * 2);
+    const key = src + '|' + size;
+    let sprite = this._skinCircleCache[key];
+    if(sprite) return sprite;
 
-    if(bodyImg && bodyImg.complete && bodyImg.naturalWidth){
-      const spacing = Math.max(6, r * 1.1);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const px = Math.max(4, Math.round(size * dpr));
+    const off = document.createElement('canvas');
+    off.width = px; off.height = px;
+    const octx = off.getContext('2d');
+    octx.save();
+    octx.beginPath();
+    octx.arc(px / 2, px / 2, px / 2, 0, Math.PI * 2);
+    octx.clip();
+    // "cover"-обрезка по центру, чтобы прямоугольная картинка не
+    // сплющивалась в круге, а заполняла его без искажений пропорций
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const side = Math.min(iw, ih);
+    const sx = (iw - side) / 2, sy = (ih - side) / 2;
+    octx.drawImage(img, sx, sy, side, side, 0, 0, px, px);
+    octx.restore();
+
+    sprite = off;
+    this._skinCircleCache[key] = sprite;
+    return sprite;
+  },
+  drawSnakeBodyImage(ctx, s, pts, r){
+    const diameter = r * 2;
+    const bodySprite = this.getSkinCircleSprite(s.skin.bodyImg, diameter);
+
+    if(bodySprite){
+      // шаг между центрами кружков = радиусу => ровно половина диаметра
+      // нахлёста между соседними кружками, как и просили
+      const spacing = Math.max(4, r);
       let acc = spacing; // рисуем и самый первый кусочек, а не только после накопления шага
       for(let i = 1; i < pts.length; i++){
         const a = pts[i - 1], b = pts[i];
         acc += snakeDist(a.x, a.y, b.x, b.y);
-        if(acc >= spacing){
-          acc = 0;
-          const ang = Math.atan2(b.y - a.y, b.x - a.x);
-          ctx.save();
-          ctx.translate(b.x, b.y);
-          ctx.rotate(ang);
-          ctx.drawImage(bodyImg, -tileSize / 2, -tileSize / 2, tileSize, tileSize);
-          ctx.restore();
+        while(acc >= spacing){
+          acc -= spacing;
+          // круг рисуется БЕЗ поворота — он одинаков с любой стороны,
+          // поэтому направление движения тут больше не имеет значения
+          ctx.drawImage(bodySprite, b.x - diameter / 2, b.y - diameter / 2, diameter, diameter);
         }
       }
     } else {
-      // картинка тела ещё не загрузилась — не даём змейке "исчезнуть"
+      // картинка тела ещё не загрузилась (или спрайт ещё не готов) —
+      // не даём змейке "исчезнуть", рисуем обычной полосой до готовности
       this.drawSnakeBandBody(ctx, s, pts, r);
       return;
     }
 
-    if(headImg && headImg.complete && headImg.naturalWidth){
+    const headDiameter = diameter * 1.3;
+    const headSprite = this.getSkinCircleSprite(s.skin.headImg, headDiameter);
+    if(headSprite){
+      // у головы направление может быть осмысленным (глаза/мордочка),
+      // поэтому её по-прежнему разворачиваем по направлению движения —
+      // жалоба про "бок" касалась именно повторяющихся кусочков тела
       ctx.save();
       ctx.translate(s.x, s.y);
       ctx.rotate(s.angle);
-      ctx.drawImage(headImg, -tileSize * 0.65, -tileSize * 0.65, tileSize * 1.3, tileSize * 1.3);
+      ctx.drawImage(headSprite, -headDiameter / 2, -headDiameter / 2, headDiameter, headDiameter);
       ctx.restore();
     } else {
       this.drawSnakeEyes(ctx, s, r);
@@ -1748,26 +1808,36 @@ const Snake = {
       canvas.addEventListener('mousedown', e=>{ if(e.button === 0) this.inputBoost = true; });
       window.addEventListener('mouseup', ()=>{ this.inputBoost = false; });
 
-      // телефон — невидимый "джойстик": палец сам становится центром
-      // управления там, где коснулся поля (а не привязан к центру
-      // экрана), поэтому направление можно полностью менять на месте,
-      // без необходимости тянуть палец через всё поле. Пока палец не
-      // сдвинулся дальше маленькой мёртвой зоны — направление не
-      // меняется (чтобы случайные дрожания при тапе не сбивали курс).
+      // телефон — невидимый КРУГОВОЙ джойстик в любой точке экрана:
+      // палец сам становится центром управления там, где коснулся поля
+      // (а не привязан к центру экрана и не к какой-то одной
+      // фиксированной зоне), поэтому направление можно полностью менять
+      // на месте, без необходимости тянуть палец через всё поле. Пока
+      // палец не сдвинулся дальше маленькой мёртвой зоны — направление
+      // не меняется (чтобы случайные дрожания при тапе не сбивали курс).
+      //
+      // Слушатели теперь висят на всей обёртке поля (.game-wrap), а не
+      // только на canvas — раньше при неточном совпадении размеров
+      // canvas и обёртки (округления при подгонке под экран) в паре
+      // пикселей по краям касание могло "провалиться" мимо джойстика.
+      // Реальные кнопки (пауза/выход/ускорение) при этом по-прежнему
+      // работают как обычно — касания по ним не трогают джойстик.
+      const wrap = document.getElementById('snakeGameWrap') || canvas;
       const JOY_DEADZONE = 10;
       let joyOriginX = 0, joyOriginY = 0, joyActive = false;
 
-      canvas.addEventListener('touchstart', e=>{
+      wrap.addEventListener('touchstart', e=>{
         const t = e.touches[0];
         if(!t) return;
+        if(e.target && e.target.closest && e.target.closest('button')) return; // не мешаем кнопкам
         joyOriginX = t.clientX; joyOriginY = t.clientY;
         joyActive = true;
       }, { passive: true });
 
-      canvas.addEventListener('touchmove', e=>{
-        e.preventDefault();
+      wrap.addEventListener('touchmove', e=>{
         const t = e.touches[0];
         if(!joyActive || !t) return;
+        e.preventDefault();
         const dx = t.clientX - joyOriginX, dy = t.clientY - joyOriginY;
         const dist = Math.hypot(dx, dy);
         if(dist < JOY_DEADZONE) return;
@@ -1783,8 +1853,8 @@ const Snake = {
       }, { passive: false });
 
       const endJoystick = ()=>{ joyActive = false; };
-      canvas.addEventListener('touchend', endJoystick);
-      canvas.addEventListener('touchcancel', endJoystick);
+      wrap.addEventListener('touchend', endJoystick);
+      wrap.addEventListener('touchcancel', endJoystick);
     }
 
     // отдельная кнопка ускорения слева снизу — для телефона

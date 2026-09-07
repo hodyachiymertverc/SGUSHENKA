@@ -63,9 +63,10 @@ function doodleRoundRect(ctx, x, y, w, h, r){
 
 const Doodle = {
   playerId: null,
-  data: { bestScore: 0, totalScore: 0, gamesPlayed: 0, springsUsed: 0, unlocked: {} },
+  data: { bestScore: 0, totalScore: 0, gamesPlayed: 0, springsUsed: 0, unlocked: {}, selectedSkin: null },
   levels: [],
   achievements: [],
+  skins: [],
   _ready: false,
   _recordsSubscribed: false,
   _loopBound: null,
@@ -75,15 +76,22 @@ const Doodle = {
   keys: { left: false, right: false },
   pointerTargetX: null,
 
+  /* способ управления: 'tilt' (наклон телефона) или 'buttons' (тап по
+     половинам экрана) — выбирается в меню, хранится на устройстве */
+  controlMode: 'tilt',
+
   /* наклон телефона (гироскоп) — управление персонажем */
   tiltValue: 0,       // сглаженное значение наклона, -1..1
   tiltActive: false,  // приходят ли вообще события наклона
   _tiltListenerAdded: false,
   _tiltPermissionAsked: false,
+  _tiltLastTs: 0,
 
   init(){
     this.playerId = getPlayerId();
+    this.controlMode = getDoodleControlMode();
     this.bindUI();
+    this.renderControlModeUI();
 
     if(!window.DB || !window.DEFAULTS){
       console.warn('Doodle: DB или DEFAULTS недоступны — Doodle-прыжки отключены.');
@@ -92,6 +100,7 @@ const Doodle = {
 
     DB.seedIfEmpty('doodleLevels', DEFAULTS.doodleLevels);
     DB.seedIfEmpty('doodleAchievements', DEFAULTS.doodleAchievements);
+    DB.seedIfEmpty('doodleSkins', DEFAULTS.doodleSkins || []);
 
     DB.watchCollection('doodleLevels', list=>{
       this.levels = list.slice().sort((a,b)=> (a.min||0) - (b.min||0));
@@ -103,21 +112,26 @@ const Doodle = {
       this.renderProfileUI();
       this.checkAchievements();
     });
+    DB.watchCollection('doodleSkins', list=>{
+      this.skins = list.slice().sort((a,b)=> (a.order||0) - (b.order||0));
+      this.renderSkinModal();
+    });
     DB.watchItem('doodlePlayers', this.playerId, doc=>{
       this.data = Object.assign(
-        { bestScore: 0, totalScore: 0, gamesPlayed: 0, springsUsed: 0, unlocked: {} },
+        { bestScore: 0, totalScore: 0, gamesPlayed: 0, springsUsed: 0, unlocked: {}, selectedSkin: null },
         doc || {}
       );
       this._ready = true;
       this.renderMenuUI();
       this.renderProfileUI();
+      this.renderSkinModal();
       this.checkAchievements();
     });
 
     DB.getItemOnce('doodlePlayers', this.playerId).then(doc=>{
       if(!doc){
         DB.setItem('doodlePlayers', this.playerId, {
-          name: getNickname(), bestScore: 0, totalScore: 0, gamesPlayed: 0, springsUsed: 0, unlocked: {}
+          name: getNickname(), bestScore: 0, totalScore: 0, gamesPlayed: 0, springsUsed: 0, unlocked: {}, selectedSkin: null
         });
       } else if(doc.name !== getNickname()){
         DB.setItem('doodlePlayers', this.playerId, { name: getNickname() });
@@ -169,6 +183,101 @@ const Doodle = {
       DB.setItem('doodlePlayers', this.playerId, { bestScore: score });
     }
     this.submitScore(score);
+  },
+
+  /* ---------------- управление: акселерометр / кнопки на экране ---------------- */
+  renderControlModeUI(){
+    const tiltBtn = document.getElementById('doodleControlTiltBtn');
+    const btnsBtn = document.getElementById('doodleControlButtonsBtn');
+    const hint = document.getElementById('doodleControlHint');
+    if(tiltBtn) tiltBtn.classList.toggle('active', this.controlMode === 'tilt');
+    if(btnsBtn) btnsBtn.classList.toggle('active', this.controlMode === 'buttons');
+    if(hint){
+      hint.textContent = this.controlMode === 'buttons'
+        ? 'Держи палец в левой половине экрана — прыгун идёт налево, в правой — направо'
+        : 'Наклоняй телефон влево/вправо, на компьютере — стрелки ← → или A/D';
+    }
+  },
+  setControlMode(mode){
+    mode = mode === 'buttons' ? 'buttons' : 'tilt';
+    if(this.controlMode === mode) return;
+    this.controlMode = mode;
+    setDoodleControlMode(mode);
+    this.keys.left = false;
+    this.keys.right = false;
+    this.pointerTargetX = null;
+    this.renderControlModeUI();
+  },
+
+  /* ---------------- скины персонажа ---------------- */
+  // скин с привязкой к достижению открыт, только если это достижение
+  // уже разблокировано у игрока; без привязки — открыт всем сразу
+  isSkinUnlocked(skin){
+    if(!skin || !skin.achievementId) return true;
+    return !!(this.data.unlocked && this.data.unlocked[skin.achievementId]);
+  },
+  openSkinModal(){
+    const modal = document.getElementById('doodleSkinModal');
+    if(modal) modal.classList.remove('hidden');
+    this.renderSkinModal();
+  },
+  closeSkinModal(){
+    const modal = document.getElementById('doodleSkinModal');
+    if(modal) modal.classList.add('hidden');
+  },
+  renderSkinModal(){
+    const grid = document.getElementById('doodleSkinGrid');
+    if(!grid || !this._ready) return;
+    grid.innerHTML = '';
+    const selectedId = this.data.selectedSkin || null;
+
+    // встроенный скин по умолчанию — доступен всегда
+    const defaultCard = document.createElement('div');
+    defaultCard.className = 'skin-card' + (!selectedId ? ' selected' : '');
+    defaultCard.innerHTML = `
+      <div class="skin-thumb">🥄</div>
+      <div class="skin-name">Стандартный</div>`;
+    defaultCard.addEventListener('click', ()=> this.selectSkin(null));
+    grid.appendChild(defaultCard);
+
+    (this.skins || []).forEach(skin=>{
+      const unlocked = this.isSkinUnlocked(skin);
+      const card = document.createElement('div');
+      card.className = 'skin-card' + (selectedId === skin.id ? ' selected' : '') + (unlocked ? '' : ' locked');
+      const ach = (this.achievements || []).find(a=> a.id === skin.achievementId);
+      card.innerHTML = `
+        <div class="skin-thumb">${skin.img ? `<img src="${skin.img}" alt="">` : '🥄'}</div>
+        <div class="skin-name">${skin.name || 'Скин'}</div>
+        ${unlocked ? '' : `<div class="skin-lock-note">🔒 ${ach ? ach.title : 'достижение'}</div>`}`;
+      card.addEventListener('click', ()=>{
+        if(!unlocked) return;
+        this.selectSkin(skin.id);
+      });
+      grid.appendChild(card);
+    });
+  },
+  selectSkin(id){
+    this.data.selectedSkin = id;
+    if(window.DB) DB.setItem('doodlePlayers', this.playerId, { selectedSkin: id });
+    this.renderSkinModal();
+  },
+  // итоговая картинка персонажа: подобранный скин (если открыт) или
+  // встроенный по умолчанию (возвращает null — рисуется doodleCharImg)
+  resolvePlayerSkinImage(){
+    const id = this.data.selectedSkin;
+    if(!id) return null;
+    const skin = (this.skins || []).find(sk=> sk.id === id);
+    if(skin && this.isSkinUnlocked(skin) && skin.img) return skin.img;
+    return null;
+  },
+  _skinImageCache: {},
+  getSkinImage(src){
+    if(!src) return null;
+    if(this._skinImageCache[src]) return this._skinImageCache[src];
+    const img = new Image();
+    img.src = src;
+    this._skinImageCache[src] = img;
+    return img;
   },
 
   /* ---------------- UI: пилюля уровня в меню ---------------- */
@@ -261,11 +370,19 @@ const Doodle = {
     const canvas = document.getElementById('doodleCanvas');
     const wrap = document.getElementById('doodleGameWrap');
     if(!screen || !canvas || !wrap || screen.classList.contains('hidden')) return;
-    const topbar = document.querySelector('.topbar');
-    const hud = document.getElementById('doodleHud');
     const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    const used = (topbar ? topbar.offsetHeight : 0) + (hud ? hud.offsetHeight : 0) + 40;
-    const height = Math.max(320, vh - used);
+    // раньше высота считалась грубо (topbar+hud+запас 40px) и не
+    // учитывала ни нижний отступ <main>, ни собственный margin-bottom
+    // обёртки поля (.doodle-wrap, 12px) — из-за чего низ поля мог
+    // уезжать за пределы видимой области на телефоне. Теперь берём
+    // реальную позицию обёртки на экране и реальные отступы вокруг неё.
+    const wrapTop = wrap.getBoundingClientRect().top;
+    const mainEl = document.querySelector('main');
+    const mainPadBottom = mainEl ? (parseFloat(getComputedStyle(mainEl).paddingBottom) || 0) : 0;
+    const wrapMarginBottom = parseFloat(getComputedStyle(wrap).marginBottom) || 0;
+    const bottomSafety = 8;
+    const available = Math.max(0, vh - wrapTop - mainPadBottom - wrapMarginBottom - bottomSafety);
+    const height = Math.max(320, available);
     wrap.style.height = height + 'px';
     canvas.style.height = height + 'px';
     this.resizeCanvasBuffer();
@@ -298,15 +415,30 @@ const Doodle = {
   enableTiltControls(){
     if(this._tiltListenerAdded) return;
     this._tiltListenerAdded = true;
+    this._tiltLastTs = 0;
     window.addEventListener('deviceorientation', e=>{
+      if(this.controlMode !== 'tilt') return; // в режиме кнопок наклон игнорируем
       if(e.gamma === null || e.gamma === undefined) return;
       // gamma: наклон влево-вправо, примерно -90..90 градусов
       const raw = Math.max(-40, Math.min(40, e.gamma)) / 40; // -1..1
-      this.tiltValue = this.tiltValue * 0.72 + raw * 0.28; // сглаживание, без рывков
+      // раньше сглаживание было фиксированным (0.72/0.28) и не зависело
+      // от того, как часто реально приходят события — на многих Android
+      // deviceorientation срабатывает всего 5-10 раз в секунду, и с таким
+      // коэффициентом отклик ощущался "как будто с задержкой". Теперь
+      // сглаживание считается от РЕАЛЬНО прошедшего времени между
+      // событиями (экспоненциальное сглаживание по dt), поэтому при
+      // редких событиях персонаж всё равно быстро "догоняет" наклон.
+      const now = performance.now();
+      const dt = this._tiltLastTs ? Math.min(150, now - this._tiltLastTs) : 16;
+      this._tiltLastTs = now;
+      const tau = 45; // мс — чем меньше, тем быстрее реакция на наклон
+      const alpha = 1 - Math.exp(-dt / tau);
+      this.tiltValue = this.tiltValue + (raw - this.tiltValue) * alpha;
       this.tiltActive = true;
     });
   },
   requestTiltPermission(){
+    if(this.controlMode !== 'tilt') return; // режим "кнопки" — гироскоп не нужен
     if(this._tiltPermissionAsked) return;
     this._tiltPermissionAsked = true;
     try{
@@ -762,7 +894,15 @@ const Doodle = {
     ctx.save();
     ctx.translate(p.x, sy);
     if(p.facing < 0) ctx.scale(-1, 1);
-    if(doodleCharImg){
+    // скин, выбранный игроком в меню (загружается через админку и
+    // открывается за достижения) — если он ещё не открыт/не выбран,
+    // используем встроенную картинку по умолчанию
+    const skinSrc = this.resolvePlayerSkinImage();
+    const skinImg = skinSrc ? this.getSkinImage(skinSrc) : null;
+    const readySkinImg = (skinImg && skinImg.complete && skinImg.naturalWidth) ? skinImg : null;
+    if(readySkinImg){
+      ctx.drawImage(readySkinImg, -s / 2, -s / 2, s, s);
+    } else if(doodleCharImg){
       ctx.drawImage(doodleCharImg, -s / 2, -s / 2, s, s);
     } else {
       // запасной вариант — рисуем баночку-персонажа с лицом
@@ -893,9 +1033,9 @@ const Doodle = {
       else if(rightKeys.has(e.key)) this.keys.right = false;
     });
 
-    // палец/мышь — запасной способ управления (когда наклон телефона
-    // недоступен/не разрешён). Если наклон уже активен — пальцем не
-    // управляем, чтобы способы ввода не спорили друг с другом.
+    // палец/мышь — два способа: "наклон" (запасной вариант на случай
+    // недоступного гироскопа) и "кнопки" (тап по половине экрана, явно
+    // выбранный игроком в настройках управления)
     const canvas = document.getElementById('doodleCanvas');
     if(canvas){
       const setPointerFromEvent = (clientX)=>{
@@ -903,21 +1043,59 @@ const Doodle = {
         const rect = canvas.getBoundingClientRect();
         this.pointerTargetX = clientX - rect.left;
       };
+      // режим "кнопки": палец в левой половине экрана — идём налево,
+      // в правой — направо, пока палец удерживается (как настоящие
+      // невидимые кнопки, а не аналоговый стик к точке касания)
+      const setButtonSideFromEvent = (clientX)=>{
+        const rect = canvas.getBoundingClientRect();
+        const half = rect.left + rect.width / 2;
+        this.keys.left = clientX < half;
+        this.keys.right = clientX >= half;
+      };
+      const clearButtonSides = ()=>{ this.keys.left = false; this.keys.right = false; };
+
+      const handleStartOrMove = (clientX)=>{
+        if(this.controlMode === 'buttons') setButtonSideFromEvent(clientX);
+        else setPointerFromEvent(clientX);
+      };
+      const handleEnd = ()=>{
+        if(this.controlMode === 'buttons') clearButtonSides();
+        else this.pointerTargetX = null;
+      };
+
       canvas.addEventListener('touchstart', e=>{
         if(!e.touches[0]) return;
-        setPointerFromEvent(e.touches[0].clientX);
+        handleStartOrMove(e.touches[0].clientX);
       }, { passive: true });
       canvas.addEventListener('touchmove', e=>{
         e.preventDefault();
         if(!e.touches[0]) return;
-        setPointerFromEvent(e.touches[0].clientX);
+        handleStartOrMove(e.touches[0].clientX);
       }, { passive: false });
-      canvas.addEventListener('touchend', ()=>{ this.pointerTargetX = null; });
-      canvas.addEventListener('touchcancel', ()=>{ this.pointerTargetX = null; });
+      canvas.addEventListener('touchend', handleEnd);
+      canvas.addEventListener('touchcancel', handleEnd);
 
-      canvas.addEventListener('mousemove', e=> setPointerFromEvent(e.clientX));
-      canvas.addEventListener('mouseleave', ()=>{ this.pointerTargetX = null; });
+      canvas.addEventListener('mousedown', e=> handleStartOrMove(e.clientX));
+      canvas.addEventListener('mousemove', e=>{
+        if(this.controlMode === 'buttons'){
+          if(e.buttons) handleStartOrMove(e.clientX);
+        } else {
+          setPointerFromEvent(e.clientX);
+        }
+      });
+      canvas.addEventListener('mouseup', handleEnd);
+      canvas.addEventListener('mouseleave', handleEnd);
     }
+
+    const tiltBtn = document.getElementById('doodleControlTiltBtn');
+    const buttonsBtn = document.getElementById('doodleControlButtonsBtn');
+    if(tiltBtn) tiltBtn.addEventListener('click', ()=> this.setControlMode('tilt'));
+    if(buttonsBtn) buttonsBtn.addEventListener('click', ()=> this.setControlMode('buttons'));
+
+    const skinBtn = document.getElementById('doodleSkinBtn');
+    const skinCloseBtn = document.getElementById('doodleSkinCloseBtn');
+    if(skinBtn) skinBtn.addEventListener('click', ()=> this.openSkinModal());
+    if(skinCloseBtn) skinCloseBtn.addEventListener('click', ()=> this.closeSkinModal());
 
     window.addEventListener('resize', ()=> this.fitCanvas());
     window.addEventListener('orientationchange', ()=> setTimeout(()=> this.fitCanvas(), 200));

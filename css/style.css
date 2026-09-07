@@ -328,6 +328,11 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 }
 .game-pick:active{ transform: translateY(3px); box-shadow:none; }
 .game-pick:hover{ border-color: var(--gold); }
+.game-pick.active{
+  border-color: var(--gold);
+  background: linear-gradient(180deg,#FFF9E8,var(--white));
+  box-shadow: 0 6px 0 var(--gold);
+}
 .game-pick-emoji{ font-size:2.4rem; }
 .game-pick-name{ font-family:'Baloo 2',sans-serif; font-weight:800; font-size:1.15rem; color:var(--caramel-dark); }
 .game-pick-desc{ font-size:0.85rem; color:#8a6a45; font-weight:600; }
@@ -616,6 +621,24 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 }
 .ttt-player-pill.active-turn{ border-color: var(--gold); background: linear-gradient(180deg,#FFF9E8,var(--white)); }
 .ttt-vs{ font-weight:700; color:#8a6a45; }
+
+/* Пилюли HUD крестиков-ноликов раньше меняли ширину на каждый ход
+   (текст "Ходишь ты" / "Ход соперника" разной длины) и таймер/пинг
+   вообще исчезали и появлялись (display:none) — из-за этого вся
+   строка HUD пересчитывала раскладку каждый ход, и кнопка "Выход"
+   вместе с остальными пилюлями буквально прыгала по горизонтали,
+   отчего казалось, что вся страница дёргается. Фиксируем ширину
+   под самый длинный вариант текста и держим место под таймер/пинг
+   зарезервированным всегда (просто прячем содержимое, а не саму
+   пилюлю), чтобы раскладка HUD больше не пересчитывалась на лету. */
+#tttModePill, #tttTurnPill{ min-width: 148px; text-align:center; }
+#tttTimerPill, #tttPingPill{ min-width: 84px; text-align:center; }
+#tttTimerPill.hidden, #tttPingPill.hidden{
+  display:flex !important; visibility:hidden !important;
+}
+@media (max-width:420px){
+  #tttModePill, #tttTurnPill{ min-width: 128px; }
+}
 
 .ttt-board-wrap{ position:relative; max-width:380px; margin:0 auto; }
 .ttt-board{

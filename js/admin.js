@@ -819,6 +819,23 @@ function mountAllConfigSections(){
     }
   });
 
+  /* ---- скины персонажа Doodle-прыжков (по образцу картиночных скинов змейки) ---- */
+  mountConfigSection({
+    collection: 'doodleSkins',
+    addFormElId: 'doodleSkinsAddForm', addBtnId: 'doodleSkinsAddBtn', listElId: 'doodleSkinsList',
+    seed: (window.DEFAULTS && DEFAULTS.doodleSkins) || [],
+    emptyText: 'Пока нет дополнительных скинов.',
+    fields: [
+      { key:'name', label:'Название', type:'text', default:'' },
+      { key:'img', label:'Картинка персонажа', type:'image', default:'' },
+      { key:'achievementId', label:'ID нужного достижения, необязательно (см. список выше)', type:'text', default:'' },
+      { key:'order', label:'Порядок в списке', type:'number', default:1 }
+    ],
+    summary(item){
+      return { title: item.name || 'Скин', sub: `достижение: ${item.achievementId || 'нет (открыт всем)'}` };
+    }
+  });
+
   mountDoodlePlayers();
 
   /* ---- уровни крестиков-ноликов ---- */
@@ -1338,7 +1355,7 @@ snakeRecordsMedium, snakeRecordsHard, snakeRecordsOnline, snakeRooms,
 snakeOnlinePlayers, snakeClassicLevels, snakeClassicAchievements,
 snakeClassicPlayers, snakeClassicRecordsEasy, snakeClassicRecordsHard,
 doodleLevels, doodleAchievements, doodlePlayers,
-doodleRecords, snakeSkins, snakeImageSkins, tttGames, tttLobby,
+doodleRecords, doodleSkins, snakeSkins, snakeImageSkins, tttGames, tttLobby,
 _ping — по аналогии с тем, как уже разрешены records и news).`;
   } else if(hintEl){
     hintEl.classList.add('hidden');
