@@ -235,7 +235,16 @@ const SnakeClassic = {
     const canvas = document.getElementById('snakeClassicCanvas');
     const wrap = document.getElementById('snakeClassicGameWrap');
     if(!screen || !canvas || !wrap || screen.classList.contains('hidden')) return;
-    const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+
+    // visualViewport даёт реальную видимую высоту (без адресной строки
+    // и т.п.), а offsetTop — насколько видимая область "прокручена"
+    // относительно layout-viewport на мобильных браузерах. Без учёта
+    // offsetTop расчёт может ошибиться ровно на высоту этой прокрутки.
+    const vv = window.visualViewport;
+    const viewportHeight = vv ? vv.height : window.innerHeight;
+    const viewportOffsetTop = vv ? vv.offsetTop : 0;
+    const visibleBottom = viewportOffsetTop + viewportHeight;
+
     // раньше "used" (место над полем) считался как грубая сумма
     // topbar.offsetHeight + hud.offsetHeight + 40 — этот запас не
     // учитывал ни нижний отступ <main> (padding-bottom), ни safe-area
@@ -257,12 +266,26 @@ const SnakeClassic = {
     // уезжал за пределы видимой области — именно это выглядело как
     // "нижняя граница поля вылезает". Теперь отступ вычитаем явно.
     const wrapMarginBottom = parseFloat(getComputedStyle(wrap).marginBottom) || 0;
-    const bottomSafety = 8; // небольшой дополнительный запас на всякий случай
-    const available = Math.max(0, vh - wrapTop - mainPadBottom - wrapMarginBottom - bottomSafety);
+    const bottomSafety = 12; // небольшой дополнительный запас на всякий случай
+    const available = Math.max(0, visibleBottom - wrapTop - mainPadBottom - wrapMarginBottom - bottomSafety);
     const minHeight = Math.min(220, available || 220);
-    const height = Math.max(minHeight, available);
+    let height = Math.max(minHeight, available);
     wrap.style.height = height + 'px';
     canvas.style.height = height + 'px';
+
+    // самопроверка: если после применения высоты нижняя стенка поля
+    // всё равно оказалась за пределами реально видимой области (это
+    // может случиться, если браузер ещё не закончил менять размер
+    // адресной строки/панели ровно в момент расчёта) — досчитываем
+    // ещё раз по фактическому положению wrap и подрезаем высоту, пока
+    // низ поля не окажется внутри видимой области
+    const actualBottom = wrap.getBoundingClientRect().bottom;
+    if(actualBottom > visibleBottom){
+      height = Math.max(minHeight, height - (actualBottom - visibleBottom) - bottomSafety);
+      wrap.style.height = height + 'px';
+      canvas.style.height = height + 'px';
+    }
+
     this.resizeCanvasBuffer();
   },
   resizeCanvasBuffer(){
@@ -663,7 +686,14 @@ const SnakeClassic = {
 
     window.addEventListener('resize', ()=> this.fitCanvas());
     window.addEventListener('orientationchange', ()=> setTimeout(()=> this.fitCanvas(), 200));
-    if(window.visualViewport) window.visualViewport.addEventListener('resize', ()=> this.fitCanvas());
+    if(window.visualViewport){
+      window.visualViewport.addEventListener('resize', ()=> this.fitCanvas());
+      // scroll у visualViewport часто стреляет при скрытии/появлении
+      // адресной строки мобильного браузера — как раз в тот момент,
+      // когда меняется реально видимая высота, но событие resize
+      // window при этом может не сработать вовремя
+      window.visualViewport.addEventListener('scroll', ()=> this.fitCanvas());
+    }
   }
 };
 
