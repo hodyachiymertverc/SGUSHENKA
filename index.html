@@ -134,6 +134,7 @@
       <div class="clicker-header">
         <button class="btn btn-secondary btn-small" id="clickerBackBtn">⬅ Выбор игры</button>
         <button class="btn btn-secondary btn-small" id="clickerAchBtn">🏆 Достижения</button>
+        <button class="btn btn-secondary btn-small" id="clickerRecordsBtn">🥇 Рекорды</button>
         <button class="btn btn-secondary btn-small" id="clickerRestartBtn">🔁 Начать заново</button>
       </div>
 
@@ -711,6 +712,16 @@
 
     <h2 style="margin-top:22px;">🏆 Достижения</h2>
     <div class="ach-grid" id="snakeAchievementsGrid"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: РЕКОРДЫ КЛИКЕРА -->
+<div class="modal hidden" id="clickerRecordsModal">
+  <div class="modal-card">
+    <button class="modal-close" data-close="clickerRecordsModal">✖</button>
+    <h2>🥇 Рекорды кликера</h2>
+    <p class="modal-note">Общий рейтинг всех игроков по всего заработанным банкам сгущёнки.</p>
+    <ol class="records-list" id="clickerRecordsList"></ol>
   </div>
 </div>
 

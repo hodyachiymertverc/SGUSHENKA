@@ -116,6 +116,7 @@ document.getElementById('backToSelectBtn').addEventListener('click', ()=>{
 });
 document.getElementById('clickerBackBtn').addEventListener('click', ()=>{
   hide(clickerScreen); show(gameSelectScreen);
+  if(window.Clicker) Clicker.syncRecord(); // подтягиваем таблицу рекордов кликера при выходе
 });
 document.getElementById('clickerAchBtn').addEventListener('click', ()=>{
   show(document.getElementById('clickerAchModal'));
@@ -227,10 +228,9 @@ if(saveNicknameBtn){
       const nick = nicknameInput.value.trim().slice(0,16) || getNickname();
       LocalPrefs.set(KEYS.nickname, nick);
       LocalPrefs.set(KEYS.nicknameLocked, true);
-      if(window.DB){
-        DB.setItem('profiles', getPlayerId(), { name: nick });
-        DB.setItem('clickerPlayers', getPlayerId(), { name: nick });
-      }
+      // переносим новый ник не только в профиль и кликер, а вообще
+      // везде на сайте (все игры с рекордами) — см. syncNicknameEverywhere в player.js
+      if(window.DB) syncNicknameEverywhere(nick);
     }
     refreshNicknameBar();
     nicknameEditRow.classList.add('hidden');

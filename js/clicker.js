@@ -71,6 +71,10 @@ const Clicker = {
 
     this.bindUI();
     setInterval(()=> this.autoTick(), 1000);
+    // таблица рекордов кликера (по всего заработанным банкам) — обновляем
+    // не на каждый клик (было бы слишком часто), а раз в несколько секунд;
+    // addRecordIn сам по себе ничего не пишет, если счёт не вырос
+    setInterval(()=> this.syncRecord(), 4000);
     setTimeout(()=>{
       if(!this._ready){
         const hint = document.getElementById('clickerLoadHint');
@@ -89,6 +93,37 @@ const Clicker = {
     if(restartBtn){
       restartBtn.addEventListener('click', ()=> this.restart());
     }
+    const recordsBtn = document.getElementById('clickerRecordsBtn');
+    if(recordsBtn){
+      recordsBtn.addEventListener('click', ()=> this.openRecords());
+    }
+  },
+
+  /* ---------------- UI: рекорды (по всего заработанным банкам) ---------------- */
+  syncRecord(){
+    if(!this._ready || !window.DB) return;
+    DB.addRecordIn('clickerRecords', this.playerId, getNickname(), Math.floor(this.data.totalEarned || 0));
+  },
+  openRecords(){
+    this.syncRecord(); // сразу подтягиваем свежий счёт перед показом таблицы
+    show(document.getElementById('clickerRecordsModal'));
+    if(!this._recordsSubscribed && window.DB){
+      this._recordsSubscribed = true;
+      DB.watchRecordsIn('clickerRecords', list=> this.renderRecordsList(list));
+    }
+  },
+  renderRecordsList(list){
+    const el = document.getElementById('clickerRecordsList');
+    if(!el) return;
+    if(!list.length){
+      el.innerHTML = '<p class="news-empty">Пока нет рекордов. Стань первым!</p>';
+      return;
+    }
+    const myId = this.playerId;
+    el.innerHTML = list.slice(0, 20).map(r=>{
+      const cls = r.playerId === myId ? ' class="my-record"' : '';
+      return `<li${cls}>${formatNum(r.score)} банок <span>— ${escapeHtmlC(r.name)}, ${r.date}</span></li>`;
+    }).join('');
   },
 
   // полный сброс прогресса кликера (баланс, прокачки, достижения) —

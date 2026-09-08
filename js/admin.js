@@ -41,6 +41,9 @@ let unsubSnakeClassicHard = null;
 let currentSnakeClassicEasyList = [];
 let currentSnakeClassicHardList = [];
 
+let unsubClickerRecords = null;
+let currentClickerRecordsList = [];
+
 let unsubDoodleRecords = null;
 let currentDoodleRecordsList = [];
 
@@ -85,6 +88,10 @@ function tryLogin(){
     unsubSnakeClassicHard = DB.watchRecordsIn('snakeClassicRecordsHard', list=>{
       currentSnakeClassicHardList = list;
       renderAdminSnakeRecords('adminSnakeClassicRecordsHard', list, 'snakeClassicRecordsHard');
+    });
+    unsubClickerRecords = DB.watchRecordsIn('clickerRecords', list=>{
+      currentClickerRecordsList = list;
+      renderAdminClickerRecords(list);
     });
     unsubDoodleRecords = DB.watchRecordsIn('doodleRecords', list=>{
       currentDoodleRecordsList = list;
@@ -272,6 +279,23 @@ function renderAdminRecords(list){
 document.getElementById('clearAllRecordsBtn').addEventListener('click', ()=>{
   if(confirm('Точно очистить ВСЕ рекорды у всех игроков?')){
     DB.clearAllRecords(currentRecordsList);
+  }
+});
+
+/* ---------------- КЛИКЕР: рекорды (по всего заработанным банкам) ---------------- */
+const clickerRecordsState = { editingId: null };
+function renderAdminClickerRecords(list){
+  currentClickerRecordsList = list;
+  renderRecordsAdmin('adminClickerRecordsList', list, {
+    updateFn: (id, patch)=> DB.updateRecordIn('clickerRecords', id, patch),
+    deleteFn: (id)=> DB.deleteRecordIn('clickerRecords', id),
+    state: clickerRecordsState,
+    rerender: ()=> renderAdminClickerRecords(currentClickerRecordsList)
+  });
+}
+document.getElementById('clearClickerRecordsBtn').addEventListener('click', ()=>{
+  if(confirm('Точно очистить ВСЕ рекорды кликера?')){
+    DB.clearRecordsIn('clickerRecords', currentClickerRecordsList);
   }
 });
 
@@ -1165,7 +1189,9 @@ function mountAllPlayers(){
 
   const sources = ['profiles', 'clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers'];
   const latestByCollection = {};
+  const loadedOnce = {};
   let merged = {};
+  let renderTimer = null;
 
   function rebuild(){
     merged = {};
@@ -1177,10 +1203,24 @@ function mountAllPlayers(){
         merged[item.id].seenIn.push(col);
       });
     });
-    render();
+    // Пока не пришёл хотя бы один снапшот от КАЖДОГО источника (в
+    // частности от 'profiles', где обычно и лежит настоящее имя) —
+    // список не показываем вовсе. Раньше рендер срывался по первому же
+    // ответившему источнику, поэтому игрок мог на долю секунды
+    // мелькнуть как "(без ника)", пока остальные источники ещё грузятся
+    // — это и была та самая "мигающая учётка без ника".
+    if(sources.some(col=> !loadedOnce[col])) return;
+    // 'clickerPlayers' обновляется живьём каждую секунду у каждого
+    // активного игрока (автодоход) — без задержки список бы полностью
+    // перерисовывался по нескольку раз в секунду и "мигал" целиком.
+    // Поэтому реальный рендер откладываем и схлопываем частые подряд
+    // обновления в один.
+    if(renderTimer) clearTimeout(renderTimer);
+    renderTimer = setTimeout(render, 400);
   }
 
   function render(){
+    renderTimer = null;
     const q = ((searchEl && searchEl.value) || '').trim().toLowerCase();
     const list = Object.values(merged)
       .filter(p=> !q || (p.name || '').toLowerCase().includes(q))
@@ -1201,6 +1241,7 @@ function mountAllPlayers(){
           </div>
           <div class="actions">
             <button class="mini-btn view-btn" data-edit="1">✏️ Изменить ник</button>
+            <button class="mini-btn del-btn" data-deleteplayer="1">🗑 Удалить полностью</button>
           </div>
         </div>
         <div class="cfg-form hidden" data-editform="1"></div>
@@ -1230,13 +1271,36 @@ function mountAllPlayers(){
           formEl.classList.add('hidden');
         });
       });
+
+      card.querySelector('[data-deleteplayer]').addEventListener('click', ()=>{
+        if(!confirm(`Удалить игрока «${p.name}» ПОЛНОСТЬЮ? Будут стёрты его ник, статистика и все его рекорды во всех играх сайта. Отменить нельзя.`)) return;
+        deletePlayerEverywhere(p.id);
+      });
     });
   }
 
   sources.forEach(col=>{
-    DB.watchCollection(col, list=>{ latestByCollection[col] = list; rebuild(); });
+    DB.watchCollection(col, list=>{ latestByCollection[col] = list; loadedOnce[col] = true; rebuild(); });
   });
-  if(searchEl) searchEl.addEventListener('input', render);
+  if(searchEl) searchEl.addEventListener('input', ()=>{ if(!renderTimer) render(); });
+}
+
+// Полное удаление игрока: и профильные коллекции (ключ записи = id
+// игрока), и все таблицы рекордов, где записи лежат под своим ключом,
+// а игрок ищется по полю playerId внутри записи.
+function deletePlayerEverywhere(id){
+  if(!window.DB) return;
+  const PROFILE_COLLECTIONS = ['profiles', 'clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers'];
+  PROFILE_COLLECTIONS.forEach(col=> DB.deleteItem(col, id));
+  const recordCollections = ['records', ...ALL_RECORD_COLLECTIONS];
+  recordCollections.forEach(col=>{
+    DB.listOnce(col).then(list=>{
+      (list || []).filter(r=> r && r.playerId === id).forEach(r=>{
+        if(col === 'records') DB.deleteRecord(r.id);
+        else DB.deleteRecordIn(col, r.id);
+      });
+    }).catch(err=> console.warn('deletePlayerEverywhere: ' + col, err));
+  });
 }
 
 // таблицы рекордов хранят записи под своим собственным (не совпадающим с
@@ -1249,7 +1313,7 @@ function mountAllPlayers(){
 // найденной (если есть) записи этого playerId — не только в профильных
 // коллекциях типа snakePlayers/doodlePlayers.
 const ALL_RECORD_COLLECTIONS = [
-  'doodleRecords',
+  'clickerRecords', 'doodleRecords',
   'snakeClassicRecordsEasy', 'snakeClassicRecordsHard',
   'snakeRecordsEasy', 'snakeRecordsMedium', 'snakeRecordsHard', 'snakeRecordsOnline',
   'tttRecords'

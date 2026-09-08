@@ -130,6 +130,44 @@ function watchAdminNicknameOverride(){
 if(document.readyState !== 'loading') watchAdminNicknameOverride();
 else document.addEventListener('DOMContentLoaded', watchAdminNicknameOverride);
 
+/* =========================================================
+   СМЕНА НИКА САМИМ ИГРОКОМ (главное меню) — переносим ник ВЕЗДЕ.
+   Раньше при сохранении своего ника здесь (см. saveNicknameBtn в
+   script.js) правились только 'profiles' и 'clickerPlayers' — из-за
+   этого старый ник навсегда "застревал" во всех таблицах рекордов
+   (Лови сгущёнку, Змейка classic/io, Doodle, крестики-нолики) и в
+   игровых коллекциях этих игр: addRecord()/addRecordIn() в db.js
+   НАРОЧНО не трогают имя уже существующей записи рекорда (это
+   сделано, чтобы правка ника из АДМИНКИ не затиралась следующей же
+   игрой) — а значит и обратное само не происходит: смена ника самим
+   игроком в эти записи никак не долетала. renamePlayerEverywhere в
+   admin.js уже решает эту же задачу для админки — здесь то же самое,
+   но без метки nameSetByAdmin (это правка самого игрока, а не админа)
+   и только в те игровые коллекции, где запись уже реально есть
+   (чтобы не плодить "пустые" записи в играх, в которые игрок ни разу
+   не играл). */
+const GAME_PLAYER_COLLECTIONS = ['clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers'];
+const GAME_RECORD_COLLECTIONS = [
+  'clickerRecords', 'doodleRecords',
+  'snakeClassicRecordsEasy', 'snakeClassicRecordsHard',
+  'snakeRecordsEasy', 'snakeRecordsMedium', 'snakeRecordsHard', 'snakeRecordsOnline',
+  'tttRecords'
+];
+function syncNicknameEverywhere(newName){
+  if(!window.DB) return;
+  const id = getPlayerId();
+  DB.setItem('profiles', id, { name: newName });
+  GAME_PLAYER_COLLECTIONS.forEach(col=>{
+    // патчим имя, только если запись у игрока в этой игре уже есть —
+    // иначе создали бы "призрачного" игрока в игре, в которую он
+    // никогда не заходил
+    DB.getItemOnce(col, id).then(doc=>{ if(doc) DB.setItem(col, id, { name: newName }); });
+  });
+  DB.renameInRecordsByPlayerId(id, newName); // таблица рекордов "Лови сгущёнку"
+  GAME_RECORD_COLLECTIONS.forEach(col=> DB.renameInRecordsInByPlayerId(col, id, newName));
+}
+window.syncNicknameEverywhere = syncNicknameEverywhere;
+
 /* виден ли сейчас указанный экран (используется, чтобы всплывающие
    окна с достижениями/событиями показывались только в "своей" игре) */
 function isScreenVisible(id){
