@@ -609,6 +609,38 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 ========================================================= */
 .doodle-wrap{ margin-bottom: 12px; }
 
+/* ползунок чувствительности наклона — виден только в режиме
+   управления "наклон", прячется через .hidden в режиме "кнопки" */
+.doodle-tilt-sens{
+  display:flex; align-items:center; gap:10px; margin-top:10px;
+  font-family:'Baloo 2',sans-serif;
+}
+.doodle-tilt-sens.hidden{ display:none; }
+.doodle-tilt-sens label{
+  font-weight:700; color: var(--caramel-dark); font-size:0.9rem; white-space:nowrap;
+}
+.doodle-tilt-sens input[type="range"]{
+  flex:1; -webkit-appearance:none; appearance:none;
+  height:8px; border-radius:6px;
+  background: linear-gradient(90deg, var(--gold), #EADFC8);
+  outline:none; cursor:pointer;
+}
+.doodle-tilt-sens input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none;
+  width:20px; height:20px; border-radius:50%;
+  background: var(--white); border:3px solid var(--gold);
+  box-shadow: 0 2px 0 var(--shadow); cursor:pointer;
+}
+.doodle-tilt-sens input[type="range"]::-moz-range-thumb{
+  width:20px; height:20px; border-radius:50%;
+  background: var(--white); border:3px solid var(--gold);
+  box-shadow: 0 2px 0 var(--shadow); cursor:pointer;
+}
+.doodle-tilt-sens-value{
+  min-width:28px; text-align:center; font-weight:800;
+  color: var(--caramel-dark); font-size:0.9rem;
+}
+
 /* =========================================================
    КРЕСТИКИ-НОЛИКИ
 ========================================================= */

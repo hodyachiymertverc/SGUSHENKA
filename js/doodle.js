@@ -30,6 +30,22 @@ function escapeHtmlD(str){ const d = document.createElement('div'); d.textConten
 function doodleShow(el){ if(el) el.classList.remove('hidden'); }
 function doodleHide(el){ if(el) el.classList.add('hidden'); }
 
+/* чувствительность наклона — храним в localStorage отдельно от
+   способа управления (getDoodleControlMode/setDoodleControlMode
+   определены в script.js), чтобы значение с ползунка сохранялось
+   между заходами в игру */
+const DOODLE_TILT_SENS_KEY = 'doodleTiltSensitivity';
+function getDoodleTiltSensitivity(){
+  try{
+    const v = parseFloat(localStorage.getItem(DOODLE_TILT_SENS_KEY));
+    if(!isNaN(v)) return Math.max(0.5, Math.min(2.5, v));
+  } catch(err){ /* localStorage недоступен — просто используем дефолт */ }
+  return 1.5;
+}
+function setDoodleTiltSensitivity(v){
+  try{ localStorage.setItem(DOODLE_TILT_SENS_KEY, String(v)); } catch(err){}
+}
+
 /* картинка персонажа — своя, если положена в img/doodle_sguchenka.png,
    иначе рисуем баночку-заменитель (сайт не ломается без картинки) */
 const DOODLE_CHAR_SRC = 'img/doodle_sguchenka.png';
@@ -86,6 +102,11 @@ const Doodle = {
   _tiltListenerAdded: false,
   _tiltPermissionAsked: false,
   _tiltLastTs: 0,
+  /* чувствительность наклона (регулируется ползунком в настройках):
+     0.5 — нужно наклонять сильнее, 2.5 — реагирует на едва заметный
+     наклон. 1.5 выбрано как более резкое значение по умолчанию —
+     раньше отклик на маленький наклон был вялым. */
+  tiltSensitivity: getDoodleTiltSensitivity(),
 
   init(){
     this.playerId = getPlayerId();
@@ -196,6 +217,9 @@ const Doodle = {
     const tiltBtn = document.getElementById('doodleControlTiltBtn');
     const btnsBtn = document.getElementById('doodleControlButtonsBtn');
     const hint = document.getElementById('doodleControlHint');
+    const sensWrap = document.getElementById('doodleTiltSensWrap');
+    const sensSlider = document.getElementById('doodleTiltSensSlider');
+    const sensValue = document.getElementById('doodleTiltSensValue');
     if(tiltBtn) tiltBtn.classList.toggle('active', this.controlMode === 'tilt');
     if(btnsBtn) btnsBtn.classList.toggle('active', this.controlMode === 'buttons');
     if(hint){
@@ -203,6 +227,10 @@ const Doodle = {
         ? 'Держи палец в левой половине экрана — прыгун идёт налево, в правой — направо'
         : 'Наклоняй телефон влево/вправо, на компьютере — стрелки ← → или A/D';
     }
+    // ползунок чувствительности наклона нужен только в режиме tilt
+    if(sensWrap) sensWrap.classList.toggle('hidden', this.controlMode !== 'tilt');
+    if(sensSlider) sensSlider.value = this.tiltSensitivity;
+    if(sensValue) sensValue.textContent = this.tiltSensitivity.toFixed(1);
   },
   setControlMode(mode){
     mode = mode === 'buttons' ? 'buttons' : 'tilt';
@@ -213,6 +241,13 @@ const Doodle = {
     this.keys.right = false;
     this.pointerTargetX = null;
     this.renderControlModeUI();
+  },
+  setTiltSensitivity(value){
+    const v = Math.max(0.5, Math.min(2.5, parseFloat(value) || 1.5));
+    this.tiltSensitivity = v;
+    setDoodleTiltSensitivity(v);
+    const sensValue = document.getElementById('doodleTiltSensValue');
+    if(sensValue) sensValue.textContent = v.toFixed(1);
   },
 
   /* ---------------- скины персонажа ---------------- */
@@ -425,8 +460,12 @@ const Doodle = {
     window.addEventListener('deviceorientation', e=>{
       if(this.controlMode !== 'tilt') return; // в режиме кнопок наклон игнорируем
       if(e.gamma === null || e.gamma === undefined) return;
-      // gamma: наклон влево-вправо, примерно -90..90 градусов
-      const raw = Math.max(-40, Math.min(40, e.gamma)) / 40; // -1..1
+      // gamma: наклон влево-вправо, примерно -90..90 градусов.
+      // Чем выше tiltSensitivity, тем меньший угол нужен, чтобы
+      // "выжать" полное значение -1..1 (делим не на фиксированные 40,
+      // а на 40/sensitivity — при sensitivity=2.5 хватит наклона ~16°).
+      const range = 40 / this.tiltSensitivity;
+      const raw = Math.max(-range, Math.min(range, e.gamma)) / range; // -1..1
       // раньше сглаживание было фиксированным (0.72/0.28) и не зависело
       // от того, как часто реально приходят события — на многих Android
       // deviceorientation срабатывает всего 5-10 раз в секунду, и с таким
@@ -437,7 +476,10 @@ const Doodle = {
       const now = performance.now();
       const dt = this._tiltLastTs ? Math.min(150, now - this._tiltLastTs) : 16;
       this._tiltLastTs = now;
-      const tau = 45; // мс — чем меньше, тем быстрее реакция на наклон
+      // tau (мс) тоже зависит от чувствительности: чем она выше, тем
+      // меньше tau и тем резче персонаж реагирует на изменение наклона.
+      // На 1.5 (дефолт) — 30мс, было 45мс до добавления ползунка.
+      const tau = Math.max(15, 45 / this.tiltSensitivity);
       const alpha = 1 - Math.exp(-dt / tau);
       this.tiltValue = this.tiltValue + (raw - this.tiltValue) * alpha;
       this.tiltActive = true;
@@ -1097,6 +1139,12 @@ const Doodle = {
     const buttonsBtn = document.getElementById('doodleControlButtonsBtn');
     if(tiltBtn) tiltBtn.addEventListener('click', ()=> this.setControlMode('tilt'));
     if(buttonsBtn) buttonsBtn.addEventListener('click', ()=> this.setControlMode('buttons'));
+
+    const sensSlider = document.getElementById('doodleTiltSensSlider');
+    if(sensSlider){
+      sensSlider.value = this.tiltSensitivity;
+      sensSlider.addEventListener('input', ()=> this.setTiltSensitivity(sensSlider.value));
+    }
 
     const skinBtn = document.getElementById('doodleSkinBtn');
     const skinCloseBtn = document.getElementById('doodleSkinCloseBtn');
