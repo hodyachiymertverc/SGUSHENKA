@@ -610,17 +610,22 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 .doodle-wrap{ margin-bottom: 12px; }
 
 /* ползунок чувствительности наклона — виден только в режиме
-   управления "наклон", прячется через .hidden в режиме "кнопки" */
+   управления "наклон", прячется через .hidden в режиме "кнопки".
+   Раньше подпись/ползунок/значение стояли в один ряд (flex) и на
+   узких экранах не помещались — подпись обрезала место у ползунка.
+   Теперь подпись всегда на своей строке, а ползунок со значением —
+   под ней, во всю доступную ширину, так что не зависит от того,
+   насколько узкий экран. */
 .doodle-tilt-sens{
-  display:flex; align-items:center; gap:10px; margin-top:10px;
-  font-family:'Baloo 2',sans-serif;
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px;
+  margin-top:10px; font-family:'Baloo 2',sans-serif;
 }
 .doodle-tilt-sens.hidden{ display:none; }
 .doodle-tilt-sens label{
-  font-weight:700; color: var(--caramel-dark); font-size:0.9rem; white-space:nowrap;
+  flex:0 0 100%; font-weight:700; color: var(--caramel-dark); font-size:0.9rem;
 }
 .doodle-tilt-sens input[type="range"]{
-  flex:1; -webkit-appearance:none; appearance:none;
+  flex:1 1 0; min-width:0; -webkit-appearance:none; appearance:none;
   height:8px; border-radius:6px;
   background: linear-gradient(90deg, var(--gold), #EADFC8);
   outline:none; cursor:pointer;
@@ -637,7 +642,7 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
   box-shadow: 0 2px 0 var(--shadow); cursor:pointer;
 }
 .doodle-tilt-sens-value{
-  min-width:28px; text-align:center; font-weight:800;
+  flex:0 0 auto; min-width:28px; text-align:center; font-weight:800;
   color: var(--caramel-dark); font-size:0.9rem;
 }
 
