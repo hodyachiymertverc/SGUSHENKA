@@ -268,20 +268,30 @@ const SnakeClassic = {
     const wrapMarginBottom = parseFloat(getComputedStyle(wrap).marginBottom) || 0;
     const bottomSafety = 12; // небольшой дополнительный запас на всякий случай
     const available = Math.max(0, visibleBottom - wrapTop - mainPadBottom - wrapMarginBottom - bottomSafety);
-    const minHeight = Math.min(220, available || 220);
-    let height = Math.max(minHeight, available);
+
+    // ВАЖНО: раньше здесь был жёсткий "пол" (минимум 220px), которым
+    // высота принудительно поднималась, даже если реально видимого места
+    // было МЕНЬШЕ 220px. Из-за этого на невысоких окнах/экранах низ поля
+    // гарантированно вылезал за пределы видимой области — и последующая
+    // самопроверка ниже не могла это исправить, потому что тоже не имела
+    // права опустить высоту ниже этого пола (Math.max(minHeight, ...)).
+    // Видимость нижней стенки важнее фиксированного минимума, поэтому
+    // теперь высота считается строго по доступному месту.
+    const ABSOLUTE_MIN = 120; // ниже уже неудобно играть, но это не жёсткий пол — см. самопроверку ниже
+    let height = available > 0 ? Math.max(ABSOLUTE_MIN, available) : ABSOLUTE_MIN;
     wrap.style.height = height + 'px';
     canvas.style.height = height + 'px';
 
     // самопроверка: если после применения высоты нижняя стенка поля
     // всё равно оказалась за пределами реально видимой области (это
     // может случиться, если браузер ещё не закончил менять размер
-    // адресной строки/панели ровно в момент расчёта) — досчитываем
-    // ещё раз по фактическому положению wrap и подрезаем высоту, пока
-    // низ поля не окажется внутри видимой области
+    // адресной строки/панели ровно в момент расчёта, или если реально
+    // доступного места меньше ABSOLUTE_MIN) — досчитываем ещё раз по
+    // фактическому положению wrap и подрезаем высоту, ПОКА низ поля не
+    // окажется внутри видимой области — даже если итог меньше ABSOLUTE_MIN
     const actualBottom = wrap.getBoundingClientRect().bottom;
     if(actualBottom > visibleBottom){
-      height = Math.max(minHeight, height - (actualBottom - visibleBottom) - bottomSafety);
+      height = Math.max(40, height - (actualBottom - visibleBottom) - bottomSafety);
       wrap.style.height = height + 'px';
       canvas.style.height = height + 'px';
     }
