@@ -647,6 +647,18 @@ const DB = {
       return Promise.resolve(this._localGet('gd_col_' + name, []));
     }
   },
+  // занят ли ник каким-то ДРУГИМ игроком (сравнение без учёта
+  // регистра/лишних пробелов). 'profiles' — общий список никнеймов
+  // всех, кто когда-либо заходил на сайт (см. Profile.ensureProfileAndStreak
+  // в profile.js — запись туда пишется при каждом заходе). excludeId —
+  // id самого проверяемого игрока, чтобы не сравнивать ник сам с собой.
+  isNicknameTaken(name, excludeId){
+    const norm = (name || '').trim().toLowerCase();
+    if(!norm) return Promise.resolve(false);
+    return this.listOnce('profiles').then(list=>
+      list.some(x=> x && String(x.id) !== String(excludeId) && (x.name || '').trim().toLowerCase() === norm)
+    );
+  },
   /* каждой коллекции нужно один раз "засеять" данные по умолчанию,
      если она ещё пуста (первый запуск сайта / без облака) */
   seedIfEmpty(name, seedList){

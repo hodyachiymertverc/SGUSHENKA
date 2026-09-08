@@ -106,7 +106,12 @@ function applyAdminNicknameOverride(doc){
   const appliedTs = LocalPrefs.get(KEYS.nicknameAdminTs, 0);
   if(doc.nameSetByAdmin > appliedTs){
     LocalPrefs.set(KEYS.nickname, doc.name);
-    LocalPrefs.set(KEYS.nicknameLocked, true);
+    // обычная правка ника из админки блокирует повторное редактирование
+    // (как и при самостоятельной правке игроком) — а вот полное удаление
+    // игрока (сброс на случайный ник, см. deletePlayerEverywhere в
+    // admin.js) нарочно оставляет ник РАЗБЛОКИРОВАННЫМ, чтобы игрок сразу
+    // мог задать себе новый ник сам
+    LocalPrefs.set(KEYS.nicknameLocked, !doc.nicknameReset);
     LocalPrefs.set(KEYS.nicknameAdminTs, doc.nameSetByAdmin);
     if(typeof window.onNicknameChangedByAdmin === 'function') window.onNicknameChangedByAdmin(doc.name);
   }

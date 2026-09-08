@@ -224,16 +224,33 @@ if(nicknameEditBtn){
 }
 if(saveNicknameBtn){
   saveNicknameBtn.addEventListener('click', ()=>{
-    if(!isNicknameLocked()){
-      const nick = nicknameInput.value.trim().slice(0,16) || getNickname();
+    if(isNicknameLocked()){
+      refreshNicknameBar();
+      nicknameEditRow.classList.add('hidden');
+      return;
+    }
+    const nick = nicknameInput.value.trim().slice(0,16) || getNickname();
+    const nicknameTakenNote = document.getElementById('nicknameTakenNote');
+    if(nicknameTakenNote) nicknameTakenNote.classList.add('hidden');
+    const finish = ()=>{
       LocalPrefs.set(KEYS.nickname, nick);
       LocalPrefs.set(KEYS.nicknameLocked, true);
       // переносим новый ник не только в профиль и кликер, а вообще
       // везде на сайте (все игры с рекордами) — см. syncNicknameEverywhere в player.js
       if(window.DB) syncNicknameEverywhere(nick);
-    }
-    refreshNicknameBar();
-    nicknameEditRow.classList.add('hidden');
+      refreshNicknameBar();
+      nicknameEditRow.classList.add('hidden');
+    };
+    if(!window.DB){ finish(); return; }
+    saveNicknameBtn.disabled = true;
+    DB.isNicknameTaken(nick, getPlayerId()).then(taken=>{
+      saveNicknameBtn.disabled = false;
+      if(taken){
+        if(nicknameTakenNote) nicknameTakenNote.classList.remove('hidden');
+        return;
+      }
+      finish();
+    }).catch(()=>{ saveNicknameBtn.disabled = false; finish(); });
   });
 }
 

@@ -1259,16 +1259,30 @@ function mountAllPlayers(){
           <label class="cfg-field wide">Новый никнейм
             <input type="text" id="allp_newname" maxlength="16" value="${escapeHtml(p.name)}">
           </label>
+          <p class="modal-note hidden" id="allp_taken_note" style="color:var(--bad);font-weight:700;">Этот никнейм уже занят другим игроком.</p>
           <div class="cfg-form-actions">
             <button class="mini-btn save-btn" type="button" data-savebtn="1">💾 Сохранить везде</button>
           </div>`;
         formEl.classList.remove('hidden');
-        formEl.querySelector('[data-savebtn]').addEventListener('click', ()=>{
+        const saveBtn = formEl.querySelector('[data-savebtn]');
+        const takenNote = formEl.querySelector('#allp_taken_note');
+        saveBtn.addEventListener('click', ()=>{
           const input = document.getElementById('allp_newname');
           const newName = (input.value || '').trim().slice(0, 16);
           if(!newName) return;
-          renamePlayerEverywhere(p.id, newName, p.seenIn);
-          formEl.classList.add('hidden');
+          takenNote.classList.add('hidden');
+          saveBtn.disabled = true;
+          DB.isNicknameTaken(newName, p.id).then(taken=>{
+            saveBtn.disabled = false;
+            if(taken){ takenNote.classList.remove('hidden'); return; }
+            renamePlayerEverywhere(p.id, newName, p.seenIn);
+            formEl.classList.add('hidden');
+          }).catch(err=>{
+            console.warn('isNicknameTaken error', err);
+            saveBtn.disabled = false;
+            renamePlayerEverywhere(p.id, newName, p.seenIn);
+            formEl.classList.add('hidden');
+          });
         });
       });
 
@@ -1288,10 +1302,42 @@ function mountAllPlayers(){
 // Полное удаление игрока: и профильные коллекции (ключ записи = id
 // игрока), и все таблицы рекордов, где записи лежат под своим ключом,
 // а игрок ищется по полю playerId внутри записи.
+//
+// 'profiles' — отдельный случай: её НЕ удаляем целиком, а сбрасываем
+// на новый случайный ник. Ник хранится у игрока локально в браузере
+// (аккаунтов с паролем на сайте нет), поэтому напрямую стереть его
+// оттуда из админки нельзя — но 'profiles/<id>.nameSetByAdmin' уже
+// используется как канал "живой" отправки нового ника игроку (см.
+// watchAdminNicknameOverride в player.js): игрок либо прямо сейчас
+// на сайте (применится почти мгновенно), либо применится при
+// следующем заходе. Обычная правка ника из админки после применения
+// БЛОКИРУЕТ повторное редактирование — а здесь специально ставим
+// метку nicknameReset, чтобы player.js оставил ник РАЗБЛОКИРОВАННЫМ:
+// как и просили, ник стирается, появляется случайный, и игрок может
+// сразу задать свой.
+const RESET_NICK_ADJECTIVES = ['Сладкий','Липкий','Варёный','Карамельный','Медовый','Молочный','Пушистый','Хитрый','Голодный','Резвый','Бодрый','Ленивый','Загадочный','Отважный','Шустрый','Весёлый','Сонный','Крутой'];
+const RESET_NICK_NOUNS = ['Мишка','Енот','Кот','Хомяк','Барсук','Ёжик','Бобёр','Лис','Заяц','Крот','Тигр','Панда','Волк','Сурок','Опоссум','Гусь'];
+function generateRandomNicknameForReset(){
+  const adj = RESET_NICK_ADJECTIVES[Math.floor(Math.random() * RESET_NICK_ADJECTIVES.length)];
+  const noun = RESET_NICK_NOUNS[Math.floor(Math.random() * RESET_NICK_NOUNS.length)];
+  const num = 1 + Math.floor(Math.random() * 999);
+  return `${adj} ${noun}${num}`;
+}
+// подбираем случайный ник, которого ещё нет у ДРУГИХ игроков (см.
+// требование про уникальность ников ниже) — несколько попыток на
+// случай редкого совпадения, дальше не страшно взять и занятый
+function pickUniqueRandomNickname(excludeId, attempt){
+  attempt = attempt || 0;
+  const name = generateRandomNicknameForReset();
+  return DB.isNicknameTaken(name, excludeId).then(taken=>{
+    if(taken && attempt < 5) return pickUniqueRandomNickname(excludeId, attempt + 1);
+    return name;
+  }).catch(()=> name);
+}
 function deletePlayerEverywhere(id){
   if(!window.DB) return;
-  const PROFILE_COLLECTIONS = ['profiles', 'clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers'];
-  PROFILE_COLLECTIONS.forEach(col=> DB.deleteItem(col, id));
+  const OTHER_PROFILE_COLLECTIONS = ['clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers'];
+  OTHER_PROFILE_COLLECTIONS.forEach(col=> DB.deleteItem(col, id));
   const recordCollections = ['records', ...ALL_RECORD_COLLECTIONS];
   recordCollections.forEach(col=>{
     DB.listOnce(col).then(list=>{
@@ -1300,6 +1346,9 @@ function deletePlayerEverywhere(id){
         else DB.deleteRecordIn(col, r.id);
       });
     }).catch(err=> console.warn('deletePlayerEverywhere: ' + col, err));
+  });
+  pickUniqueRandomNickname(id).then(freshName=>{
+    DB.setItem('profiles', id, { name: freshName, nameSetByAdmin: Date.now(), nicknameReset: true });
   });
 }
 
@@ -1324,7 +1373,14 @@ function renamePlayerEverywhere(id, newName, seenIn){
   cols.add('profiles'); // всегда пишем сюда — отсюда игрок "живьём" подхватит новый ник
   cols.forEach(col=>{
     const patch = { name: newName };
-    if(col === 'profiles') patch.nameSetByAdmin = ts;
+    if(col === 'profiles'){
+      patch.nameSetByAdmin = ts;
+      // обычное переименование из админки должно блокировать повторное
+      // редактирование (как раньше) — явно снимаем метку "сброса ника"
+      // (см. deletePlayerEverywhere), иначе она осталась бы от прошлого
+      // удаления и ник у игрока навсегда остался бы разблокированным
+      patch.nicknameReset = false;
+    }
     DB.setItem(col, id, patch);
   });
   // таблица рекордов основной игры ("Лови сгущёнку") — отдельная коллекция
