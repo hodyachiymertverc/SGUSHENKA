@@ -297,6 +297,16 @@ const SnakeClassic = {
     }
 
     this.resizeCanvasBuffer();
+
+    // изменение canvas.width/canvas.height (внутри resizeCanvasBuffer)
+    // ВСЕГДА очищает содержимое канваса. Обычно его тут же перерисовывает
+    // игровой цикл loop() на следующем кадре — но loop() не вызывает
+    // render(), пока игра на паузе (см. цикл ниже). Из-за этого при
+    // изменении размера окна ВО ВРЕМЯ паузы канвас оставался пустым
+    // (без стенок и змейки) до тех пор, пока игрок не нажмёт
+    // "Продолжить". Поэтому перерисовываем явно прямо здесь, независимо
+    // от паузы — лишь бы игра уже была начата (snakeBody уже существует).
+    if(this.snakeBody) this.render();
   },
   resizeCanvasBuffer(){
     const canvas = document.getElementById('snakeClassicCanvas');
@@ -477,12 +487,25 @@ const SnakeClassic = {
     const rect = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, rect.width, rect.height);
 
+    // ВРЕМЕННАЯ ДИАГНОСТИКА — один раз выводит в консоль реальные цифры
+    // сетки, чтобы понять, почему стенки могут вылезать за канвас.
+    // Потом эту диагностику нужно убрать.
+    if(!this._debuggedOnce){
+      this._debuggedOnce = true;
+      console.log('SnakeClassic render debug', {
+        canvasWidthAttr: canvas.width, canvasHeightAttr: canvas.height,
+        rectWidth: rect.width, rectHeight: rect.height,
+        cols: this.cols, rows: this.rows,
+        devicePixelRatio
+      });
+    }
+
     // небольшой отступ от самого края канваса — чтобы толстая стена
     // поля никогда не рисовалась впритык к границе (и тем более не
     // "вылезала" за неё из-за субпиксельного округления при масштабировании)
     const PAD = 3;
-    const innerW = Math.max(0, rect.width - PAD * 2);
-    const innerH = Math.max(0, rect.height - PAD * 2);
+    const innerW = Math.max(0, rect.width - PAD * 1);
+    const innerH = Math.max(0, rect.height - PAD * 5);
     const cs = Math.min(innerW / this.cols, innerH / this.rows);
     const offX = PAD + (innerW - cs * this.cols) / 2;
     const offY = PAD + (innerH - cs * this.rows) / 2;
