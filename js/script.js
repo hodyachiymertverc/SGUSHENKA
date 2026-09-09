@@ -654,3 +654,6 @@ if(window.Doodle){
 if(window.TicTacToe){
   try{ TicTacToe.init(); } catch(err){ console.error('TicTacToe.init() упал:', err); }
 }
+if(window.DroneGame){
+  try{ DroneGame.init(); } catch(err){ console.error('DroneGame.init() упал:', err); }
+}
