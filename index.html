@@ -82,6 +82,158 @@
           <span class="game-pick-name">Крестики-нолики</span>
           <span class="game-pick-desc">Против бота или онлайн</span>
         </button>
+        <button class="game-pick" id="pickDroneBtn">
+          <span class="game-pick-emoji">🚁</span>
+          <span class="game-pick-name">Дрон-разведчик</span>
+          <span class="game-pick-desc">3D-полёт над лесополосой</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ЭКРАН ДРОНА: НАСТРОЙКА + 3D-ПОЛЁТ -->
+  <section id="droneScreen" class="screen hidden">
+
+    <!-- Панель настройки перед вылетом -->
+    <div class="menu-card" id="droneSetupPanel">
+      <button class="btn btn-secondary btn-small back-btn" id="droneBackBtn">⬅ Выбор игры</button>
+      <h1 class="title">Дрон-разведчик</h1>
+      <p class="subtitle">Ты появляешься в лесополосе на краю поля. Выбери модель дрона и заряд батареи, потом взлетай и осматривай окрестности — там ходит, ездит и стреляет противник, так что не зевай.</p>
+
+      <h2 style="margin-top:18px;font-size:1.05rem;">Модель дрона</h2>
+      <div class="game-pick-grid game-pick-grid-3" id="droneModelGrid">
+        <button class="game-pick drone-pick" id="droneModelScout" data-model="scout">
+          <span class="game-pick-emoji">🪶</span>
+          <span class="game-pick-name">Скаут</span>
+          <span class="game-pick-desc">Быстрый и юркий, но хрупкий</span>
+        </button>
+        <button class="game-pick drone-pick active" id="droneModelBalanced" data-model="balanced">
+          <span class="game-pick-emoji">🚁</span>
+          <span class="game-pick-name">Баланс</span>
+          <span class="game-pick-desc">Средняя скорость и прочность</span>
+        </button>
+        <button class="game-pick drone-pick" id="droneModelHeavy" data-model="heavy">
+          <span class="game-pick-emoji">🛡️</span>
+          <span class="game-pick-name">Танк</span>
+          <span class="game-pick-desc">Медленный, зато живучий</span>
+        </button>
+      </div>
+
+      <h2 style="margin-top:16px;font-size:1.05rem;">Боевой модуль</h2>
+      <div class="game-pick-grid game-pick-grid-2" id="droneLoadoutGrid">
+        <button class="game-pick drone-pick active" id="droneLoadoutBomb" data-loadout="bomb">
+          <span class="game-pick-emoji">💣</span>
+          <span class="game-pick-name">Бомба</span>
+          <span class="game-pick-desc">5 сбрасываемых зарядов, взрыв по площади</span>
+        </button>
+        <button class="game-pick drone-pick" id="droneLoadoutKamikaze" data-loadout="kamikaze">
+          <span class="game-pick-emoji">💥</span>
+          <span class="game-pick-name">Камикадзе</span>
+          <span class="game-pick-desc">1 одноразовый заряд, активирует самоуничтожение</span>
+        </button>
+      </div>
+
+      <div id="droneKamikazeModelWrap" class="hidden">
+        <h2 style="margin-top:16px;font-size:1.05rem;">Модель дрона-камикадзе</h2>
+        <div class="game-pick-grid game-pick-grid-4" id="droneKamikazeModelGrid">
+          <button class="game-pick drone-pick active" id="droneKamikazeCombat" data-kamikaze-model="combat">
+            <span class="game-pick-emoji">🛩️</span>
+            <span class="game-pick-name">Комбат</span>
+          </button>
+          <button class="game-pick drone-pick" id="droneKamikazeFpv" data-kamikaze-model="fpv">
+            <span class="game-pick-emoji">🚁</span>
+            <span class="game-pick-name">FPV дрон</span>
+          </button>
+          <button class="game-pick drone-pick" id="droneKamikazeFpv3d" data-kamikaze-model="fpv3d">
+            <span class="game-pick-emoji">🛸</span>
+            <span class="game-pick-name">FPV 3D-модель</span>
+          </button>
+        </div>
+      </div>
+
+      <h2 style="margin-top:16px;font-size:1.05rem;">Заряд батареи</h2>
+      <div class="game-pick-grid game-pick-grid-3" id="droneChargeGrid">
+        <button class="game-pick drone-pick" id="droneChargeS" data-charge="s">
+          <span class="game-pick-emoji">🔋</span>
+          <span class="game-pick-name">Малый</span>
+          <span class="game-pick-desc">Короткий полёт</span>
+        </button>
+        <button class="game-pick drone-pick active" id="droneChargeM" data-charge="m">
+          <span class="game-pick-emoji">🔋</span>
+          <span class="game-pick-name">Средний</span>
+          <span class="game-pick-desc">Обычный полёт</span>
+        </button>
+        <button class="game-pick drone-pick" id="droneChargeL" data-charge="l">
+          <span class="game-pick-emoji">🔋</span>
+          <span class="game-pick-name">Большой</span>
+          <span class="game-pick-desc">Долгий полёт, дрон тяжелее</span>
+        </button>
+      </div>
+
+      <button class="btn btn-primary" id="droneTakeoffToSceneBtn" style="width:100%;margin-top:20px;">▶ Появиться в лесополосе</button>
+
+      <div class="drone-controls-hint">
+        <b>ПК:</b> WASD/стрелки — полёт, Пробел — вверх, Shift/C — вниз, B — сбросить заряд, Esc — пауза.<br>
+        <b>Телефон:</b> левый стик — направление, правый — газ вверх/вниз. Кнопка 💣 — сброс/активация заряда.
+      </div>
+    </div>
+
+    <!-- 3D-сцена полёта -->
+    <div class="game-wrap drone-wrap hidden" id="droneGameWrap">
+      <canvas id="droneCanvas"></canvas>
+
+      <button class="snake-io-btn snake-io-back" id="droneExitBtn" title="Выход">⬅</button>
+      <button class="snake-io-btn snake-io-pause" id="dronePauseBtn" title="Пауза">⏸</button>
+
+      <div class="drone-hud-top">
+        <div class="drone-bar-row">
+          <span class="drone-bar-label">❤️</span>
+          <div class="drone-bar"><div class="drone-bar-fill drone-bar-hp" id="droneHpFill"></div></div>
+        </div>
+        <div class="drone-bar-row">
+          <span class="drone-bar-label">🔋</span>
+          <div class="drone-bar"><div class="drone-bar-fill drone-bar-batt" id="droneBattFill"></div></div>
+        </div>
+      </div>
+
+      <div class="drone-hud-stats">
+        <div>⏱ <span id="droneTimeValue">0</span> с</div>
+        <div>📏 <span id="droneDistValue">0</span> м</div>
+        <div>📈 <span id="droneAltValue">0</span> м</div>
+        <div>🏆 <span id="droneScoreValue">0</span></div>
+        <div>💣 <span id="droneBombValue">0</span></div>
+      </div>
+
+      <div class="drone-hint" id="droneHint">Нажми ПРОБЕЛ (или потяни правый стик вверх), чтобы взлететь 🚁</div>
+      <button class="drone-bomb-btn" id="droneBombBtn">💣 Сбросить бомбу [B]</button>
+
+      <!-- Виртуальные стики (только сенсорные экраны) -->
+      <div class="drone-joystick drone-joystick-left" id="droneJoyLeft">
+        <div class="drone-joystick-stick" id="droneJoyLeftStick"></div>
+      </div>
+      <div class="drone-joystick drone-joystick-right" id="droneJoyRight">
+        <div class="drone-joystick-stick" id="droneJoyRightStick"></div>
+      </div>
+
+      <div id="dronePauseOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2>Пауза</h2>
+          <button class="btn btn-primary" id="droneResumeBtn">▶ Продолжить</button>
+          <button class="btn btn-secondary" id="dronePauseExitBtn">В меню</button>
+        </div>
+      </div>
+
+      <div id="droneGameOverOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2 id="droneGameOverTitle">💥 Дрон сбит!</h2>
+          <p id="droneDeathReason" class="drone-death-reason"></p>
+          <p class="final-score">Продержался: <span id="droneFinalTime">0</span> с</p>
+          <p class="final-score">Пролетел: <span id="droneFinalDist">0</span> м</p>
+          <p class="final-score">Очки: <span id="droneFinalScore">0</span></p>
+          <p id="droneNewRecordText" class="new-record hidden">🎉 Новый рекорд!</p>
+          <button class="btn btn-primary" id="droneRestartBtn">🔁 Новый вылет</button>
+          <button class="btn btn-secondary" id="droneGoMenuBtn">В меню</button>
+        </div>
       </div>
     </div>
   </section>
@@ -843,6 +995,10 @@
 <script src="js/snake-classic.js"></script>
 <script src="js/doodle.js"></script>
 <script src="js/tictactoe.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/vendor/GLTFLoader.js"></script>
+<script src="js/drone.js"></script>
 <script src="js/script.js"></script>
+<script src="js/GLTFLoader.js"></script>
 </body>
 </html>

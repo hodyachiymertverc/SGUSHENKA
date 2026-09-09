@@ -505,6 +505,8 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 ========================================================= */
 .game-pick-grid-3{ grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 480px){ .game-pick-grid-3{ grid-template-columns: 1fr; } }
+.game-pick-grid-4{ grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 700px){ .game-pick-grid-4{ grid-template-columns: repeat(2, 1fr); } }
 .join-row{ display:flex; gap:8px; }
 .join-row .text-input{ flex:1; margin-bottom:0; }
 
@@ -591,6 +593,83 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 .snake-io-boost:active, .snake-io-boost.pressed{ transform: translateY(4px); box-shadow: 0 2px 0 #C68F00; }
 @media (pointer: coarse){
   .snake-io-boost{ display:flex; }
+}
+
+/* =========================================================
+   ДРОН-РАЗВЕДЧИК (3D-полёт, Three.js)
+========================================================= */
+.drone-controls-hint{
+  margin-top:16px; font-size:0.82rem; color:#8a6a45; line-height:1.5;
+  background: var(--cream); border-radius:14px; padding:10px 12px;
+}
+
+.drone-wrap{
+  margin-bottom: 12px;
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 4px solid var(--white);
+  box-shadow: 0 10px 0 var(--shadow), 0 16px 30px rgba(0,0,0,0.18);
+}
+#droneCanvas{
+  display:block; width:100%; height:100%;
+  background: linear-gradient(180deg, #8ECAE6 0%, #cfe9c8 100%);
+  border-radius:0; border:none; box-shadow:none;
+  touch-action:none;
+}
+
+/* полоски HP/батарея сверху по центру */
+.drone-hud-top{
+  position:absolute; top:10px; left:50%; transform:translateX(-50%);
+  z-index:5; width:min(60%, 260px); display:flex; flex-direction:column; gap:5px;
+  pointer-events:none;
+}
+.drone-bar-row{ display:flex; align-items:center; gap:6px; }
+.drone-bar-label{ font-size:0.95rem; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+.drone-bar{
+  flex:1; height:12px; border-radius:8px; background: rgba(0,0,0,0.35);
+  border:2px solid rgba(255,255,255,0.6); overflow:hidden;
+}
+.drone-bar-fill{ height:100%; width:100%; border-radius:6px; transition: width .15s linear; }
+.drone-bar-hp{ background: linear-gradient(90deg,#ff6f6f,var(--bad)); }
+.drone-bar-batt{ background: linear-gradient(90deg,#8fe58a,var(--good)); }
+
+/* время / дистанция / высота — под полосками, справа */
+.drone-hud-stats{
+  position:absolute; top:60px; right:10px; z-index:5;
+  background: rgba(18,20,31,0.55); border-radius:12px; padding:8px 10px;
+  color:#fff; font-size:0.78rem; font-weight:700; text-align:right;
+  line-height:1.5; pointer-events:none;
+}
+
+/* подсказка про взлёт, гаснет сама после взлёта */
+.drone-hint{
+  position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
+  z-index:5; background: rgba(18,20,31,0.72); color:#fff;
+  padding:8px 14px; border-radius:14px; font-size:0.82rem; font-weight:700;
+  text-align:center; max-width:88%; pointer-events:none; transition: opacity .3s ease;
+}
+.drone-hint.hidden-hint{ opacity:0; }
+
+.drone-death-reason{ font-weight:700; color:#8a6a45; margin:-4px 0 6px; }
+
+/* виртуальные стики — только на сенсорных экранах */
+.drone-joystick{
+  position:absolute; bottom:18px; z-index:6;
+  width:104px; height:104px; border-radius:50%;
+  background: rgba(255,255,255,0.25); border:3px solid rgba(255,255,255,0.55);
+  display:none; align-items:center; justify-content:center;
+  touch-action:none; -webkit-user-select:none; user-select:none;
+}
+.drone-joystick-left{ left:16px; }
+.drone-joystick-right{ right:16px; }
+.drone-joystick-stick{
+  width:46px; height:46px; border-radius:50%;
+  background: rgba(255,255,255,0.85); box-shadow: 0 4px 0 rgba(0,0,0,0.25);
+  transform: translate(0,0);
+}
+@media (pointer: coarse){
+  .drone-joystick{ display:flex; }
 }
 
 /* вкладки рекордов (лёгкий/средний/сложный/онлайн) */
@@ -729,4 +808,30 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 
 @media (max-width: 420px){
   .ttt-board-wrap{ max-width: 320px; }
+}
+
+/* --- Drone payload UI --- */
+.drone-bomb-btn{
+  position:absolute;
+  right:18px;
+  bottom:18px;
+  z-index:12;
+  border:0;
+  border-radius:14px;
+  padding:12px 16px;
+  font-weight:800;
+  font-size:.95rem;
+  color:#fff;
+  background:rgba(45,45,45,.9);
+  box-shadow:0 4px 16px rgba(0,0,0,.28);
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.drone-bomb-btn:hover{transform:translateY(-1px)}
+.drone-bomb-btn:disabled{opacity:.55;cursor:not-allowed}
+#droneLoadoutGrid{grid-template-columns:repeat(2,minmax(0,1fr));}
+@media (max-width:700px){
+  #droneLoadoutGrid{grid-template-columns:1fr;}
+  .drone-bomb-btn{right:12px;bottom:12px;padding:10px 13px;font-size:.86rem;}
+  .drone-hud-stats{gap:6px;font-size:.78rem;flex-wrap:wrap;}
 }
