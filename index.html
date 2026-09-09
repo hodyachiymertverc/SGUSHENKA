@@ -100,85 +100,91 @@
       <h1 class="title">Дрон-разведчик</h1>
       <p class="subtitle">Ты появляешься в лесополосе на краю поля. Выбери модель дрона и заряд батареи, потом взлетай и осматривай окрестности — там ходит, ездит и стреляет противник, так что не зевай.</p>
 
-      <h2 style="margin-top:18px;font-size:1.05rem;">Модель дрона</h2>
-      <div class="game-pick-grid game-pick-grid-3" id="droneModelGrid">
-        <button class="game-pick drone-pick" id="droneModelScout" data-model="scout">
-          <span class="game-pick-emoji">🪶</span>
-          <span class="game-pick-name">Скаут</span>
-          <span class="game-pick-desc">Быстрый и юркий, но хрупкий</span>
+      <div class="drone-accordion" id="droneModelAccordion">
+        <button type="button" class="drone-accordion-header" id="droneModelAccordionHeader">
+          <span class="drone-accordion-title">Модель дрона</span>
+          <span class="drone-accordion-current" id="droneModelCurrent">Баланс</span>
+          <span class="drone-accordion-arrow">▾</span>
         </button>
-        <button class="game-pick drone-pick active" id="droneModelBalanced" data-model="balanced">
-          <span class="game-pick-emoji">🚁</span>
-          <span class="game-pick-name">Баланс</span>
-          <span class="game-pick-desc">Средняя скорость и прочность</span>
-        </button>
-        <button class="game-pick drone-pick" id="droneModelHeavy" data-model="heavy">
-          <span class="game-pick-emoji">🛡️</span>
-          <span class="game-pick-name">Танк</span>
-          <span class="game-pick-desc">Медленный, зато живучий</span>
-        </button>
-      </div>
-
-      <h2 style="margin-top:16px;font-size:1.05rem;">Боевой модуль</h2>
-      <div class="game-pick-grid game-pick-grid-2" id="droneLoadoutGrid">
-        <button class="game-pick drone-pick active" id="droneLoadoutBomb" data-loadout="bomb">
-          <span class="game-pick-emoji">💣</span>
-          <span class="game-pick-name">Бомба</span>
-          <span class="game-pick-desc">5 сбрасываемых зарядов, взрыв по площади</span>
-        </button>
-        <button class="game-pick drone-pick" id="droneLoadoutKamikaze" data-loadout="kamikaze">
-          <span class="game-pick-emoji">💥</span>
-          <span class="game-pick-name">Камикадзе</span>
-          <span class="game-pick-desc">1 одноразовый заряд, активирует самоуничтожение</span>
-        </button>
-      </div>
-
-      <div id="droneKamikazeModelWrap" class="hidden">
-        <h2 style="margin-top:16px;font-size:1.05rem;">Модель дрона-камикадзе</h2>
-        <div class="game-pick-grid game-pick-grid-4" id="droneKamikazeModelGrid">
-          <button class="game-pick drone-pick active" id="droneKamikazeCombat" data-kamikaze-model="combat">
-            <span class="game-pick-emoji">🛩️</span>
-            <span class="game-pick-name">Комбат</span>
+        <div class="drone-accordion-body game-pick-grid game-pick-grid-3" id="droneModelGrid">
+          <button class="game-pick drone-pick" id="droneModelScout" data-model="scout">
+            <span class="game-pick-emoji">🪶</span>
+            <span class="game-pick-name">Скаут</span>
+            <span class="game-pick-desc">Быстрый и юркий, но хрупкий</span>
+            <span class="game-pick-record">Рекорд: —</span>
           </button>
-          <button class="game-pick drone-pick" id="droneKamikazeFpv" data-kamikaze-model="fpv">
+          <button class="game-pick drone-pick active" id="droneModelBalanced" data-model="balanced">
             <span class="game-pick-emoji">🚁</span>
-            <span class="game-pick-name">FPV дрон</span>
+            <span class="game-pick-name">Баланс</span>
+            <span class="game-pick-desc">Средняя скорость и прочность</span>
+            <span class="game-pick-record">Рекорд: —</span>
           </button>
-          <button class="game-pick drone-pick" id="droneKamikazeFpv3d" data-kamikaze-model="fpv3d">
-            <span class="game-pick-emoji">🛸</span>
-            <span class="game-pick-name">FPV 3D-модель</span>
-          </button>
-          <button class="game-pick drone-pick" id="droneKamikazeRealistic" data-kamikaze-model="realistic">
-            <span class="game-pick-emoji">🎯</span>
-            <span class="game-pick-name">Реалистичный</span>
+          <button class="game-pick drone-pick" id="droneModelHeavy" data-model="heavy">
+            <span class="game-pick-emoji">🛡️</span>
+            <span class="game-pick-name">Танк</span>
+            <span class="game-pick-desc">Медленный, зато живучий</span>
+            <span class="game-pick-record">Рекорд: —</span>
           </button>
         </div>
       </div>
 
-      <h2 style="margin-top:16px;font-size:1.05rem;">Заряд батареи</h2>
-      <div class="game-pick-grid game-pick-grid-3" id="droneChargeGrid">
-        <button class="game-pick drone-pick" id="droneChargeS" data-charge="s">
-          <span class="game-pick-emoji">🔋</span>
-          <span class="game-pick-name">Малый</span>
-          <span class="game-pick-desc">Короткий полёт</span>
+      <div class="drone-accordion" id="droneLoadoutAccordion">
+        <button type="button" class="drone-accordion-header" id="droneLoadoutAccordionHeader">
+          <span class="drone-accordion-title">Боевой модуль</span>
+          <span class="drone-accordion-current" id="droneLoadoutCurrent">Бомба</span>
+          <span class="drone-accordion-arrow">▾</span>
         </button>
-        <button class="game-pick drone-pick active" id="droneChargeM" data-charge="m">
-          <span class="game-pick-emoji">🔋</span>
-          <span class="game-pick-name">Средний</span>
-          <span class="game-pick-desc">Обычный полёт</span>
+        <div class="drone-accordion-body game-pick-grid game-pick-grid-2" id="droneLoadoutGrid">
+          <button class="game-pick drone-pick active" id="droneLoadoutBomb" data-loadout="bomb">
+            <span class="game-pick-emoji">💣</span>
+            <span class="game-pick-name">Бомба</span>
+            <span class="game-pick-desc">5 сбрасываемых зарядов, взрыв по площади. Кончились — возвращайся на базу</span>
+            <span class="game-pick-record">Рекорд: —</span>
+          </button>
+          <button class="game-pick drone-pick" id="droneLoadoutKamikaze" data-loadout="kamikaze">
+            <span class="game-pick-emoji">💥</span>
+            <span class="game-pick-name">Камикадзе</span>
+            <span class="game-pick-desc">Одноразовый заряд без кнопки: врежешься — сам взорвётся</span>
+            <span class="game-pick-record">Рекорд: —</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="drone-accordion" id="droneChargeAccordion">
+        <button type="button" class="drone-accordion-header" id="droneChargeAccordionHeader">
+          <span class="drone-accordion-title">Заряд батареи</span>
+          <span class="drone-accordion-current" id="droneChargeCurrent">Средний</span>
+          <span class="drone-accordion-arrow">▾</span>
         </button>
-        <button class="game-pick drone-pick" id="droneChargeL" data-charge="l">
-          <span class="game-pick-emoji">🔋</span>
-          <span class="game-pick-name">Большой</span>
-          <span class="game-pick-desc">Долгий полёт, дрон тяжелее</span>
-        </button>
+        <div class="drone-accordion-body game-pick-grid game-pick-grid-3" id="droneChargeGrid">
+          <button class="game-pick drone-pick" id="droneChargeS" data-charge="s">
+            <span class="game-pick-emoji">🔋</span>
+            <span class="game-pick-name">Малый</span>
+            <span class="game-pick-desc">Короткий полёт</span>
+            <span class="game-pick-record">Рекорд: —</span>
+          </button>
+          <button class="game-pick drone-pick active" id="droneChargeM" data-charge="m">
+            <span class="game-pick-emoji">🔋</span>
+            <span class="game-pick-name">Средний</span>
+            <span class="game-pick-desc">Обычный полёт</span>
+            <span class="game-pick-record">Рекорд: —</span>
+          </button>
+          <button class="game-pick drone-pick" id="droneChargeL" data-charge="l">
+            <span class="game-pick-emoji">🔋</span>
+            <span class="game-pick-name">Большой</span>
+            <span class="game-pick-desc">Долгий полёт, дрон тяжелее</span>
+            <span class="game-pick-record">Рекорд: —</span>
+          </button>
+        </div>
       </div>
 
       <button class="btn btn-primary" id="droneTakeoffToSceneBtn" style="width:100%;margin-top:20px;">▶ Появиться в лесополосе</button>
 
       <div class="drone-controls-hint">
-        <b>ПК:</b> WASD/стрелки — полёт, Пробел — вверх, Shift/C — вниз, B — сбросить заряд, Esc — пауза.<br>
-        <b>Телефон:</b> левый стик — направление, правый — газ вверх/вниз. Кнопка 💣 — сброс/активация заряда.
+        <b>ПК:</b> WASD/стрелки — полёт, Пробел — вверх, Shift/C — вниз, B — сбросить бомбу, Esc — пауза.<br>
+        <b>Телефон:</b> левый стик — направление, правый — газ вверх/вниз. Кнопка 💣 — сброс бомбы.<br>
+        <b>База:</b> садись на жёлтую площадку в лесополосе — там пополняются бомбы.<br>
+        <b>Камикадзе:</b> кнопки нет — дрон взрывается сам при любом столкновении.
       </div>
     </div>
 
@@ -209,6 +215,7 @@
       </div>
 
       <div class="drone-hint" id="droneHint">Нажми ПРОБЕЛ (или потяни правый стик вверх), чтобы взлететь 🚁</div>
+      <div class="drone-base-hint hidden" id="droneBaseHint">🏠 Вы на базе</div>
       <button class="drone-bomb-btn" id="droneBombBtn">💣 Сбросить бомбу [B]</button>
 
       <!-- Виртуальные стики (только сенсорные экраны) -->
@@ -1000,7 +1007,6 @@
 <script src="js/doodle.js"></script>
 <script src="js/tictactoe.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="js/drone.js"></script>
 <script src="js/script.js"></script>
 </body>

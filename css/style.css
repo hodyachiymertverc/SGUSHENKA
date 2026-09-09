@@ -336,6 +336,31 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 .game-pick-emoji{ font-size:2.4rem; }
 .game-pick-name{ font-family:'Baloo 2',sans-serif; font-weight:800; font-size:1.15rem; color:var(--caramel-dark); }
 .game-pick-desc{ font-size:0.85rem; color:#8a6a45; font-weight:600; }
+.game-pick-record{ font-size:0.75rem; color:var(--gold); font-weight:800; margin-top:2px; }
+.game-pick.active .game-pick-record{ color:#B8860B; }
+
+/* ---- Разворачивающееся меню выбора (модель / модуль / заряд) ---- */
+.drone-accordion{
+  margin-top:16px; border:3px solid #EADFC8; border-radius:18px;
+  background: var(--cream); overflow:hidden;
+}
+.drone-accordion-header{
+  width:100%; display:flex; align-items:center; justify-content:space-between;
+  gap:8px; padding:14px 16px; background:none; border:none; cursor:pointer;
+  font-family:'Baloo 2',sans-serif; font-weight:800; color:var(--caramel-dark);
+  font-size:1rem; text-align:left;
+}
+.drone-accordion-title{ flex:1; }
+.drone-accordion-current{
+  font-family:'Nunito',sans-serif; font-weight:700; font-size:0.85rem;
+  color:#8a6a45; background:var(--white); padding:4px 10px; border-radius:10px;
+}
+.drone-accordion-arrow{ transition: transform .2s ease; color: var(--gold); font-size:1.1rem; }
+.drone-accordion.open .drone-accordion-arrow{ transform: rotate(180deg); }
+.drone-accordion-body{
+  display:none; padding:4px 14px 16px;
+}
+.drone-accordion.open .drone-accordion-body{ display:grid; }
 
 /* ---- Значки уровня / достижений ---- */
 .ach-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:10px; margin-top:14px; }
@@ -505,8 +530,6 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 ========================================================= */
 .game-pick-grid-3{ grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 480px){ .game-pick-grid-3{ grid-template-columns: 1fr; } }
-.game-pick-grid-4{ grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 700px){ .game-pick-grid-4{ grid-template-columns: repeat(2, 1fr); } }
 .join-row{ display:flex; gap:8px; }
 .join-row .text-input{ flex:1; margin-bottom:0; }
 
@@ -650,6 +673,14 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
   text-align:center; max-width:88%; pointer-events:none; transition: opacity .3s ease;
 }
 .drone-hint.hidden-hint{ opacity:0; }
+
+/* плашка «вы на базе / бомбы пополнены» */
+.drone-base-hint{
+  position:absolute; top:60px; left:10px; z-index:5;
+  background: rgba(46,138,69,0.85); color:#fff;
+  padding:7px 12px; border-radius:14px; font-size:0.8rem; font-weight:800;
+  text-align:center; max-width:60%; pointer-events:none;
+}
 
 .drone-death-reason{ font-weight:700; color:#8a6a45; margin:-4px 0 6px; }
 
