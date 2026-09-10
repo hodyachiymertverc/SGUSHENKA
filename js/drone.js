@@ -34,6 +34,24 @@ const DRONE_LOADOUTS = {
     kamikaze: { name: 'Камикадзе', bombs: 1, radius: 13, damage: 90, score: 180, oneShot: true },
 };
 /* =========================================================
+   3D-МОДЕЛИ ДРОНОВ И БОЕПРИПАСОВ (GLB, папка /models)
+   ---------------------------------------------------------
+   Для боевого модуля «Бомба» дрон визуально заменяется на
+   модель из папки «drones with a grenade», а сбрасываемый
+   заряд — на модель гранаты оттуда же. Для «Камикадзе»
+   игрок выбирает одну из 4 моделей из папки «kamikaze drones».
+========================================================= */
+const DRONE_GLB_BOMB_LOADOUT = {
+    drone: 'models/drones with a grenade/fpv_drone.glb',
+    bomb: 'models/drones with a grenade/grenade_f1.glb',
+};
+const KAMIKAZE_DRONE_MODELS = {
+    combat: { name: 'Комбат', file: 'models/kamikaze drones/combat__fpv_drone.glb' },
+    fpv: { name: 'FPV дрон', file: 'models/kamikaze drones/fpv_drone.glb' },
+    fpv3d: { name: 'FPV 3D-модель', file: 'models/kamikaze drones/fpv_drone_3d_model.glb' },
+    realistic: { name: 'Реалистичный', file: 'models/kamikaze drones/realistic_fpv_kamikaze_drone.glb' },
+};
+/* =========================================================
    МЕЛКИЕ УТИЛИТЫ
 ========================================================= */
 function droneShow(el) { if (el)
@@ -66,6 +84,8 @@ const DroneGame = {
     selectedModel: 'balanced',
     selectedCharge: 'm',
     selectedLoadout: 'bomb',
+    selectedKamikazeModel: 'combat',
+    _gltfCache: {},
     // ---- three.js ----
     renderer: null,
     scene: null,
@@ -155,9 +175,20 @@ const DroneGame = {
         this.bindAccordion('droneModelAccordion', 'droneModelAccordionHeader');
         this.bindAccordion('droneLoadoutAccordion', 'droneLoadoutAccordionHeader');
         this.bindAccordion('droneChargeAccordion', 'droneChargeAccordionHeader');
+        this.bindAccordion('droneKamikazeModelAccordion', 'droneKamikazeModelAccordionHeader');
         this.bindPickGroup('droneModelGrid', 'model', 'selectedModel', 'droneModelAccordion', 'droneModelCurrent', 'balanced');
         this.bindPickGroup('droneLoadoutGrid', 'loadout', 'selectedLoadout', 'droneLoadoutAccordion', 'droneLoadoutCurrent', 'bomb');
         this.bindPickGroup('droneChargeGrid', 'charge', 'selectedCharge', 'droneChargeAccordion', 'droneChargeCurrent', 'm');
+        this.bindPickGroup('droneKamikazeModelGrid', 'kamikazeModel', 'selectedKamikazeModel', 'droneKamikazeModelAccordion', 'droneKamikazeModelCurrent', 'combat');
+        // Выбор модели дрона-камикадзе показываем только пока выбран
+        // боевой модуль «Камикадзе».
+        const loadoutGrid = document.getElementById('droneLoadoutGrid');
+        if (loadoutGrid) {
+            loadoutGrid.querySelectorAll('.drone-pick').forEach(btn => {
+                btn.addEventListener('click', () => this.updateKamikazeModelVisibility());
+            });
+        }
+        this.updateKamikazeModelVisibility();
         const takeoffBtn = document.getElementById('droneTakeoffToSceneBtn');
         if (takeoffBtn)
             takeoffBtn.addEventListener('click', () => this.startFlight());
@@ -634,6 +665,90 @@ const DroneGame = {
         this.hideBaseHint();
         this.hintHidden = false;
     },
+    updateKamikazeModelVisibility() {
+        const wrap = document.getElementById('droneKamikazeModelAccordion');
+        if (!wrap)
+            return;
+        if (this.selectedLoadout === 'kamikaze')
+            droneShow(wrap);
+        else
+            droneHide(wrap);
+    },
+    /* =========================================================
+       ЗАГРУЗКА GLB-МОДЕЛЕЙ (дроны и боеприпасы из папки /models)
+    ========================================================= */
+    loadGLTFModel(path) {
+        if (!this._gltfCache)
+            this._gltfCache = {};
+        if (this._gltfCache[path])
+            return this._gltfCache[path];
+        if (typeof THREE.GLTFLoader === 'undefined') {
+            console.error('[drone] THREE.GLTFLoader не найден — проверь, что js/GLTFLoader.js подключён в index.html после three.min.js.');
+            return Promise.reject(new Error('GLTFLoader недоступен'));
+        }
+        const loader = new THREE.GLTFLoader();
+        const promise = new Promise((resolve, reject) => {
+            loader.load(encodeURI(path), (gltf) => resolve(gltf.scene), undefined, (err) => {
+                console.error('[drone] Не удалось загрузить 3D-модель:', path, err);
+                reject(err);
+            });
+        });
+        this._gltfCache[path] = promise;
+        return promise;
+    },
+    // Подгоняет размер и центр загруженной GLB-сцены под игровые габариты
+    // и разворачивает её носом по -Z (как у процедурной модели-заглушки).
+    fitGlbVisual(scene, targetSize) {
+        const visual = scene.clone(true);
+        visual.rotation.y = Math.PI;
+        visual.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(visual);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z) || 1;
+        const fitScale = targetSize / maxDim;
+        visual.scale.setScalar(fitScale);
+        const center = box.getCenter(new THREE.Vector3()).multiplyScalar(fitScale);
+        visual.position.sub(center);
+        return visual;
+    },
+    getSelectedDroneGlbPath() {
+        if (this.selectedLoadout === 'kamikaze') {
+            const km = KAMIKAZE_DRONE_MODELS[this.selectedKamikazeModel] || KAMIKAZE_DRONE_MODELS.combat;
+            return km.file;
+        }
+        return DRONE_GLB_BOMB_LOADOUT.drone;
+    },
+    // Асинхронно подменяет процедурного дрона-заглушку загруженной GLB-моделью.
+    loadDroneVisual(targetGroup, scale) {
+        const path = this.getSelectedDroneGlbPath();
+        this.loadGLTFModel(path).then((scene) => {
+            // сцена могла смениться (рестарт/выход), пока модель качалась
+            if (!this.scene || this.droneGroup !== targetGroup)
+                return;
+            const visual = this.fitGlbVisual(scene, scale * 1.1);
+            targetGroup.children.slice().forEach((c) => targetGroup.remove(c));
+            targetGroup.add(visual);
+            this.rotors = [];
+        }).catch((err) => {
+            // не удалось загрузить модель — остаётся процедурная заглушка
+            console.error('[drone] Визуал дрона не загружен, использую заглушку:', err);
+        });
+    },
+    // Асинхронно подменяет плейсхолдер-сферу бомбы моделью гранаты.
+    attachGrenadeVisual(bombGroup, placeholder) {
+        this.loadGLTFModel(DRONE_GLB_BOMB_LOADOUT.bomb).then((scene) => {
+            if (!bombGroup.parent)
+                return; // бомба уже взорвалась/удалена со сцены
+            const visual = this.fitGlbVisual(scene, 0.42);
+            if (placeholder && placeholder.parent)
+                bombGroup.remove(placeholder);
+            bombGroup.add(visual);
+        }).catch((err) => {
+            // не удалось загрузить модель — остаётся плейсхолдер-сфера
+            console.error('[drone] Модель гранаты не загружена, использую заглушку:', err);
+        });
+    },
     buildScene() {
         const model = DRONE_MODELS[this.selectedModel];
         const charge = DRONE_CHARGES[this.selectedCharge];
@@ -721,7 +836,8 @@ const DroneGame = {
             const rx = roadXs[i % roadXs.length];
             this.addTruck(rx, -100 - i * 55, false);
         }
-        // дрон
+        // дрон: сначала процедурная заглушка (мгновенно доступна), затем
+        // асинхронно подменяется настоящей GLB-моделью из папки /models.
         this.droneGroup = this.buildDroneMesh(model.color, model.size);
         this.pos = new THREE.Vector3(0, 0.55, 26);
         this.prevPos = this.pos.clone();
@@ -729,6 +845,7 @@ const DroneGame = {
         this.droneGroup.position.copy(this.pos);
         this.droneGroup.rotation.y = this.yaw;
         scene.add(this.droneGroup);
+        this.loadDroneVisual(this.droneGroup, model.size);
         this.camChasePos = this.pos.clone();
         this.camLookPos = this.pos.clone();
         void charge; // используется через batteryDrainPerSec, но оставим для читаемости
@@ -1188,7 +1305,11 @@ const DroneGame = {
             return;
         this.bombsLeft--;
         // Бомба отделяется от дрона и падает под действием гравитации.
-        const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+        // Визуально это модель гранаты (grenade_f1.glb), которая подгружается
+        // асинхронно поверх плейсхолдер-сферы, чтобы бомба была видна сразу.
+        const mesh = new THREE.Group();
+        const placeholder = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+        mesh.add(placeholder);
         mesh.position.copy(this.pos);
         mesh.position.y -= 0.35;
         this.scene.add(mesh);
@@ -1198,6 +1319,7 @@ const DroneGame = {
             life: 5,
             loadout,
         });
+        this.attachGrenadeVisual(mesh, placeholder);
         this.updateHud();
     },
     updateBombs(dt) {

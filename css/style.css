@@ -557,6 +557,8 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 ========================================================= */
 .game-pick-grid-3{ grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 480px){ .game-pick-grid-3{ grid-template-columns: 1fr; } }
+.game-pick-grid-4{ grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 700px){ .game-pick-grid-4{ grid-template-columns: repeat(2, 1fr); } }
 .join-row{ display:flex; gap:8px; }
 .join-row .text-input{ flex:1; margin-bottom:0; }
 

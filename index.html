@@ -156,6 +156,32 @@
         </div>
       </div>
 
+      <div class="drone-accordion hidden" id="droneKamikazeModelAccordion">
+        <button type="button" class="drone-accordion-header" id="droneKamikazeModelAccordionHeader">
+          <span class="drone-accordion-title">Модель дрона-камикадзе</span>
+          <span class="drone-accordion-current" id="droneKamikazeModelCurrent">Комбат</span>
+          <span class="drone-accordion-arrow">▾</span>
+        </button>
+        <div class="drone-accordion-body game-pick-grid game-pick-grid-4" id="droneKamikazeModelGrid">
+          <button class="game-pick drone-pick active" id="droneKamikazeCombat" data-kamikaze-model="combat">
+            <span class="game-pick-emoji">🛩️</span>
+            <span class="game-pick-name">Комбат</span>
+          </button>
+          <button class="game-pick drone-pick" id="droneKamikazeFpv" data-kamikaze-model="fpv">
+            <span class="game-pick-emoji">🚁</span>
+            <span class="game-pick-name">FPV дрон</span>
+          </button>
+          <button class="game-pick drone-pick" id="droneKamikazeFpv3d" data-kamikaze-model="fpv3d">
+            <span class="game-pick-emoji">🛸</span>
+            <span class="game-pick-name">FPV 3D-модель</span>
+          </button>
+          <button class="game-pick drone-pick" id="droneKamikazeRealistic" data-kamikaze-model="realistic">
+            <span class="game-pick-emoji">🎯</span>
+            <span class="game-pick-name">Реалистичный</span>
+          </button>
+        </div>
+      </div>
+
       <div class="drone-accordion" id="droneChargeAccordion">
         <button type="button" class="drone-accordion-header" id="droneChargeAccordionHeader">
           <span class="drone-accordion-title">Заряд батареи</span>
@@ -1036,6 +1062,7 @@
 <script src="js/doodle.js"></script>
 <script src="js/tictactoe.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/GLTFLoader.js"></script>
 <script src="js/drone.js"></script>
 <script src="js/script.js"></script>
 </body>
