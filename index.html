@@ -142,15 +142,16 @@
         </button>
         <div class="drone-accordion-body game-pick-grid game-pick-grid-2" id="droneLoadoutGrid">
           <button class="game-pick drone-pick active" id="droneLoadoutBomb" data-loadout="bomb">
+            <canvas class="game-pick-model-canvas" id="droneLoadoutBombPreview" width="160" height="112" data-glb="models/drones with a grenade/fpv_drone.glb"></canvas>
             <span class="game-pick-emoji">💣</span>
             <span class="game-pick-name">Бомба</span>
-            <span class="game-pick-desc">5 сбрасываемых зарядов, взрыв по площади. Кончились — возвращайся на базу</span>
+            <span class="game-pick-desc">Дрон fpv_drone.glb, сброс — граната grenade_f1.glb. 5 зарядов, взрыв по площади. Кончились — возвращайся на базу</span>
             <span class="game-pick-record">Рекорд: —</span>
           </button>
           <button class="game-pick drone-pick" id="droneLoadoutKamikaze" data-loadout="kamikaze">
             <span class="game-pick-emoji">💥</span>
             <span class="game-pick-name">Камикадзе</span>
-            <span class="game-pick-desc">Одноразовый заряд без кнопки: врежешься — сам взорвётся</span>
+            <span class="game-pick-desc">Одноразовый заряд без кнопки: врежешься — сам взорвётся. Модель дрона выбирается ниже</span>
             <span class="game-pick-record">Рекорд: —</span>
           </button>
         </div>
@@ -164,18 +165,22 @@
         </button>
         <div class="drone-accordion-body game-pick-grid game-pick-grid-4" id="droneKamikazeModelGrid">
           <button class="game-pick drone-pick active" id="droneKamikazeCombat" data-kamikaze-model="combat">
+            <canvas class="game-pick-model-canvas" id="droneKamikazeCombatPreview" width="160" height="112" data-glb="models/kamikaze drones/combat__fpv_drone.glb"></canvas>
             <span class="game-pick-emoji">🛩️</span>
             <span class="game-pick-name">Комбат</span>
           </button>
           <button class="game-pick drone-pick" id="droneKamikazeFpv" data-kamikaze-model="fpv">
+            <canvas class="game-pick-model-canvas" id="droneKamikazeFpvPreview" width="160" height="112" data-glb="models/kamikaze drones/fpv_drone.glb"></canvas>
             <span class="game-pick-emoji">🚁</span>
             <span class="game-pick-name">FPV дрон</span>
           </button>
           <button class="game-pick drone-pick" id="droneKamikazeFpv3d" data-kamikaze-model="fpv3d">
+            <canvas class="game-pick-model-canvas" id="droneKamikazeFpv3dPreview" width="160" height="112" data-glb="models/kamikaze drones/fpv_drone_3d_model.glb"></canvas>
             <span class="game-pick-emoji">🛸</span>
             <span class="game-pick-name">FPV 3D-модель</span>
           </button>
           <button class="game-pick drone-pick" id="droneKamikazeRealistic" data-kamikaze-model="realistic">
+            <canvas class="game-pick-model-canvas" id="droneKamikazeRealisticPreview" width="160" height="112" data-glb="models/kamikaze drones/realistic_fpv_kamikaze_drone.glb"></canvas>
             <span class="game-pick-emoji">🎯</span>
             <span class="game-pick-name">Реалистичный</span>
           </button>

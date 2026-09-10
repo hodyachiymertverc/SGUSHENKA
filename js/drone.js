@@ -123,6 +123,7 @@ const DroneGame = {
     kamikazeTimeLeft: 60, // обратный отсчёт в режиме камикадзе, секунд
     refueling: false,
     _bombRefillTimer: 0,
+    respawning: false, // камикадзе: дрон подорвался, идёт пара секунд ожидания перед возрождением на базе
     // ---- прогресс игрока: уровни/достижения/лидерборды (через db.js) ----
     playerId: null,
     _ready: false,
@@ -149,7 +150,64 @@ const DroneGame = {
         this.bindAchievementsModal();
         window.addEventListener('resize', () => this.fitCanvas());
         window.addEventListener('orientationchange', () => setTimeout(() => this.fitCanvas(), 200));
+        // закрытие вкладки/уход со страницы посреди вылета — тоже сохраняем
+        // рекорды на текущий момент, а не только при явном выходе кнопкой
+        window.addEventListener('pagehide', () => this.saveProgressOnExit());
+        window.addEventListener('beforeunload', () => this.saveProgressOnExit());
         this.initProgress();
+        this.initPickPreviews();
+    },
+    /* =========================================================
+       ЖИВЫЕ 3D-ПРЕВЬЮ МОДЕЛЕЙ В МЕНЮ ВЫБОРА
+       ---------------------------------------------------------
+       В пункте «Боевой модуль» на варианте «Бомба» показывается
+       вращающаяся модель fpv_drone.glb (та, что реально летает в
+       игре в этом режиме, см. DRONE_GLB_BOMB_LOADOUT), а сама
+       бомба при сбросе — модель grenade_f1.glb (см. attachGrenadeVisual).
+       В пункте «Модель дрона-камикадзе» — по превью на каждый из 4
+       вариантов из models/kamikaze drones, чтобы сразу было видно,
+       какой дрон выбираешь.
+    ========================================================= */
+    initPickPreviews() {
+        if (typeof THREE === 'undefined')
+            return;
+        document.querySelectorAll('.game-pick-model-canvas[data-glb]').forEach((canvas) => {
+            this.mountModelPreview(canvas, canvas.dataset.glb);
+        });
+    },
+    mountModelPreview(canvas, glbPath) {
+        let renderer;
+        try {
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        }
+        catch (e) {
+            return; // WebGL недоступен — превью просто не показывается, ошибка не критична
+        }
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        const w = canvas.width || 160, h = canvas.height || 112;
+        renderer.setSize(w, h, false);
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(32, w / h, 0.1, 50);
+        camera.position.set(0.4, 0.55, 2.6);
+        camera.lookAt(0, 0, 0);
+        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+        const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+        dir.position.set(2, 3, 2);
+        scene.add(dir);
+        const holder = new THREE.Group();
+        scene.add(holder);
+        this.loadGLTFModel(glbPath).then((gltfScene) => {
+            const visual = this.fitGlbVisual(gltfScene, 1.5);
+            holder.add(visual);
+        }).catch(() => { /* модель не загрузилась — превью остаётся пустым фоном, игра не ломается */ });
+        const animate = () => {
+            if (!canvas.isConnected)
+                return; // карточка удалена из DOM — останавливаем цикл рендера
+            holder.rotation.y += 0.014;
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        };
+        requestAnimationFrame(animate);
     },
     bindSetupUI() {
         const pickBtn = document.getElementById('pickDroneBtn');
@@ -511,12 +569,37 @@ const DroneGame = {
             droneHide(document.getElementById('dronePauseOverlay'));
     },
     exitToSetup() {
+        // Игрок выходит из игры сам (кнопка «Выход»), не разбившись и не
+        // закончив вылет — рекорды по очкам/метрам/времени всё равно должны
+        // сохраниться на текущий момент вылета, иначе прогресс потеряется.
+        this.saveProgressOnExit();
         this.stopLoop();
         this.destroyScene();
         droneHide(document.getElementById('droneGameWrap'));
         droneShow(document.getElementById('droneSetupPanel'));
         droneHide(document.getElementById('dronePauseOverlay'));
         droneHide(document.getElementById('droneGameOverOverlay'));
+    },
+    /* ---- сохраняет рекорды/статистику по тому, что уже успел налетать
+       игрок, если вылет прерывается не крушением, а обычным выходом
+       (кнопка «Выход», переход в меню, закрытие вкладки) ---- */
+    saveProgressOnExit() {
+        if (this.dead || !this.hasTakenOff)
+            return; // ещё не взлетал либо итог уже посчитан в finalizeRun()
+        this.dead = true; // не даём finalizeRun/крушению сработать повторно на этом вылете
+        this.submitOptionRecords();
+        if (window.DB && this.playerId) {
+            const patch = { totalScore: this.score, totalDistance: this.distance, gamesPlayed: 1 };
+            if (this.selectedLoadout === 'kamikaze' && this.kamikazeHits > 0)
+                patch.kamikazeHits = this.kamikazeHits;
+            DB.incrementItem('dronePlayers', this.playerId, patch);
+            if (this.score > (this.data.bestScore || 0))
+                DB.setItem('dronePlayers', this.playerId, { bestScore: this.score });
+            if (this.distance > (this.data.bestDistance || 0))
+                DB.setItem('dronePlayers', this.playerId, { bestDistance: this.distance });
+            if (this.timeAlive > (this.data.bestTime || 0))
+                DB.setItem('dronePlayers', this.playerId, { bestTime: this.timeAlive });
+        }
     },
     /* =========================================================
        КЛАВИАТУРА
@@ -645,6 +728,7 @@ const DroneGame = {
         this.refueling = false;
         this._bombRefillTimer = 0;
         this.kamikazeHits = 0;
+        this.respawning = false;
         // Камикадзе теперь режим на время: 60 секунд, в течение которых
         // подрывы об цели не завершают вылет, а просто перезапускают
         // дрон на базе — см. kamikazeDetonate()/finishKamikazeRun().
@@ -959,6 +1043,10 @@ const DroneGame = {
         group.add(gun);
         group.position.set(x, 0, z);
         this.scene.add(group);
+        // солдат тоже считается препятствием для столкновения — врезаться в
+        // него можно и это подрывает камикадзе / крушит обычный дрон
+        const soldierObstacle = { x, z, radius: 0.65, height: 1.9, destroyed: false };
+        this.obstacles.push(soldierObstacle);
         this.enemies.push({
             kind: 'soldier', group, turret: group,
             basePos: { x, z }, amp: droneRandRange(4, 9), axis: Math.random() < 0.5 ? 'x' : 'z',
@@ -966,7 +1054,7 @@ const DroneGame = {
             fireRange: 80, fireCooldown: droneRandRange(1, 3),
             fireCooldownRange: [1.4, 2.8], bulletSpeed: 42, bulletDamage: 7,
             bulletColor: 0xfff07a, spread: 0.05, collideRadius: 0.9,
-            hp: 25, score: 100, destroyed: false,
+            hp: 25, score: 100, destroyed: false, obstacle: soldierObstacle,
         });
     },
     addTank(x, z) {
@@ -1089,6 +1177,18 @@ const DroneGame = {
     update(dt) {
         if (this.dead) {
             this.updateFx(dt);
+            return;
+        }
+        // камикадзе: дрон только что взорвался — пара секунд ожидания перед
+        // возрождением на базе. Управление отключено, но мир вокруг (враги,
+        // взрыв, камера) продолжает жить, чтобы момент не выглядел «зависшим».
+        if (this.respawning) {
+            this.updateEnemies(dt);
+            this.updateBullets(dt);
+            this.updateBombs(dt);
+            this.updateFx(dt);
+            this.updateCamera(dt);
+            this.updateHud();
             return;
         }
         const model = DRONE_MODELS[this.selectedModel];
@@ -1234,6 +1334,12 @@ const DroneGame = {
                 e.group.position.x = e.basePos.x + off;
             else
                 e.group.position.z = e.basePos.z + off;
+            // столкновение должно следовать за патрулирующей техникой/солдатом,
+            // а не оставаться на точке появления
+            if (e.obstacle) {
+                e.obstacle.x = e.group.position.x;
+                e.obstacle.z = e.group.position.z;
+            }
             if (e.turret && e.fireRange > 0) {
                 const dx = this.pos.x - e.turret.getWorldPosition(new THREE.Vector3()).x;
                 const dz = this.pos.z - e.turret.getWorldPosition(new THREE.Vector3()).z;
@@ -1486,7 +1592,7 @@ const DroneGame = {
        площади + очки) и мгновенно возрождается на базе; 60-секундный
        таймер (см. update()) продолжает тикать без остановки ---- */
     kamikazeDetonate(reason) {
-        if (this.dead || !this.pos)
+        if (this.dead || this.respawning || !this.pos)
             return;
         const loadout = DRONE_LOADOUTS.kamikaze;
         const destroyed = this.applyPayloadDamage(this.pos.clone(), loadout);
@@ -1495,19 +1601,36 @@ const DroneGame = {
             SoundManager.playBomb();
         this.kamikazeHits += 1;
         this.showBaseHint(destroyed > 0 ? `💥 Подрыв! Уничтожено целей: ${destroyed}` : '💥 Подрыв!');
-        // возрождение на базе с полным здоровьем — вылет продолжается
-        this.pos.set(this.basePos.x, 0.55, this.basePos.z);
-        this.prevPos.copy(this.pos);
-        this.yaw = Math.PI;
+        // Дрон взорвался: прячем модель и на пару секунд замираем на месте
+        // взрыва (управление отключено, checkObstacleCollisions не вызывается),
+        // а затем — возрождение на базе с полным здоровьем и батареей.
+        this.respawning = true;
         this.velForward = 0;
         this.velVertical = 0;
-        this.hp = this.maxHp;
-        this.battery = 100;
-        if (this.droneGroup) {
-            this.droneGroup.position.copy(this.pos);
-            this.droneGroup.rotation.y = this.yaw;
-            this.droneGroup.visible = true;
-        }
+        if (this.droneGroup)
+            this.droneGroup.visible = false;
+        const sceneAtDetonation = this.scene;
+        setTimeout(() => {
+            // за время ожидания игрок мог выйти/перезапустить вылет — тогда
+            // сцена уже другая (или её нет), возрождать нечего
+            if (this.scene !== sceneAtDetonation || !this.pos)
+                return;
+            this.respawning = false;
+            this.pos.set(this.basePos.x, 0.55, this.basePos.z);
+            this.prevPos.copy(this.pos);
+            this.yaw = Math.PI;
+            this.velForward = 0;
+            this.velVertical = 0;
+            this.hp = this.maxHp;
+            this.battery = 100;
+            if (this.droneGroup) {
+                this.droneGroup.position.copy(this.pos);
+                this.droneGroup.rotation.y = this.yaw;
+                this.droneGroup.visible = true;
+            }
+            this.showBaseHint('🚁 Дрон возрождён на базе');
+            this.updateHud();
+        }, 2000);
         this.updateHud();
     },
     /* ---- конец 60-секундного вылета в режиме камикадзе (не крушение —
