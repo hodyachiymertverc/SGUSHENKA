@@ -391,15 +391,15 @@ const DroneGame = {
     },
     /* ---- модалка «Таблица рекордов»: группы (Модель/Модуль/Заряд), внутри
        которых отдельная вкладка на каждый вариант — своя таблица игрок/очки/
-       метры/время ---- */
+       метры/время. Сама модалка (открытие/рендер) — своя, а вот оформление
+       и закрытие (крестик с data-close, клик по фону) — общие для всего
+       сайта, как у остальных игр (см. document.querySelectorAll('.modal')
+       и '[data-close]' в script.js). ---- */
     bindRecordsModal() {
         const openBtn = document.getElementById('droneRecordsBtn');
-        const overlay = document.getElementById('droneRecordsOverlay');
-        const closeBtn = document.getElementById('droneRecordsCloseBtn');
-        if (openBtn && overlay)
-            openBtn.addEventListener('click', () => { droneShow(overlay); this.renderRecordsModal(); });
-        if (closeBtn && overlay)
-            closeBtn.addEventListener('click', () => droneHide(overlay));
+        const modal = document.getElementById('droneRecordsModal');
+        if (openBtn && modal)
+            openBtn.addEventListener('click', () => { droneShow(modal); this.renderRecordsModal(); });
     },
     _recordsGroups() {
         return [
@@ -409,8 +409,8 @@ const DroneGame = {
         ];
     },
     renderRecordsModalIfOpen() {
-        const overlay = document.getElementById('droneRecordsOverlay');
-        if (overlay && !overlay.classList.contains('hidden'))
+        const modal = document.getElementById('droneRecordsModal');
+        if (modal && !modal.classList.contains('hidden'))
             this.renderRecordsModal();
     },
     renderRecordsModal() {
@@ -422,8 +422,9 @@ const DroneGame = {
             return;
         if (!groups.find(g => g.id === this._recGroup))
             this._recGroup = 'model';
-        groupTabsEl.innerHTML = groups.map(g => `<button type="button" class="drone-rec-tab ${g.id === this._recGroup ? 'active' : ''}" data-group="${g.id}">${g.label}</button>`).join('');
-        groupTabsEl.querySelectorAll('.drone-rec-tab').forEach(btn => {
+        // класс records-tab — общий стиль вкладок сайта (как у Змейки и др.)
+        groupTabsEl.innerHTML = groups.map(g => `<button type="button" class="records-tab drone-rec-group-tab ${g.id === this._recGroup ? 'active' : ''}" data-group="${g.id}">${g.label}</button>`).join('');
+        groupTabsEl.querySelectorAll('.drone-rec-group-tab').forEach(btn => {
             btn.addEventListener('click', () => {
                 this._recGroup = btn.dataset.group;
                 const grp = groups.find(g => g.id === this._recGroup);
@@ -434,8 +435,8 @@ const DroneGame = {
         const curGroup = groups.find(g => g.id === this._recGroup);
         if (!curGroup.items.find(([k]) => k === this._recKey))
             this._recKey = curGroup.items[0][0];
-        itemTabsEl.innerHTML = curGroup.items.map(([key, label]) => `<button type="button" class="drone-rec-tab drone-rec-subtab ${key === this._recKey ? 'active' : ''}" data-key="${key}">${label}</button>`).join('');
-        itemTabsEl.querySelectorAll('.drone-rec-subtab').forEach(btn => {
+        itemTabsEl.innerHTML = curGroup.items.map(([key, label]) => `<button type="button" class="records-tab drone-rec-item-tab ${key === this._recKey ? 'active' : ''}" data-key="${key}">${label}</button>`).join('');
+        itemTabsEl.querySelectorAll('.drone-rec-item-tab').forEach(btn => {
             btn.addEventListener('click', () => { this._recKey = btn.dataset.key; this.renderRecordsModal(); });
         });
         const list = (this.leaderboards[this._recGroup] && this.leaderboards[this._recGroup][this._recKey]) || [];
@@ -457,20 +458,18 @@ const DroneGame = {
                 <tbody>${rows}</tbody>
             </table>`;
     },
-    /* ---- модалка «Достижения» ---- */
+    /* ---- модалка «Достижения» (тот же общий стиль/закрытие, что у остальных
+       игр — см. комментарий у bindRecordsModal) ---- */
     bindAchievementsModal() {
         const openBtn = document.getElementById('droneAchievementsBtn');
-        const overlay = document.getElementById('droneAchievementsOverlay');
-        const closeBtn = document.getElementById('droneAchievementsCloseBtn');
-        if (openBtn && overlay)
-            openBtn.addEventListener('click', () => { droneShow(overlay); this.renderAchievementsModal(); });
-        if (closeBtn && overlay)
-            closeBtn.addEventListener('click', () => droneHide(overlay));
+        const modal = document.getElementById('droneAchievementsModal');
+        if (openBtn && modal)
+            openBtn.addEventListener('click', () => { droneShow(modal); this.renderAchievementsModal(); });
     },
     renderAchievementsModal() {
-        const overlay = document.getElementById('droneAchievementsOverlay');
+        const modal = document.getElementById('droneAchievementsModal');
         const grid = document.getElementById('droneAchievementsGrid');
-        if (!grid || !overlay || overlay.classList.contains('hidden'))
+        if (!grid || !modal || modal.classList.contains('hidden'))
             return;
         const unlocked = this.data.unlocked || {};
         grid.innerHTML = this.achievements.map(a => {

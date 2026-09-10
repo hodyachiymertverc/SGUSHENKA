@@ -218,27 +218,6 @@
       </div>
     </div>
 
-    <!-- Модалка «Таблица рекордов»: группы (модель/модуль/заряд), внутри —
-         отдельная вкладка на каждый вариант со своей таблицей игрок/очки/метры/время -->
-    <div id="droneRecordsOverlay" class="overlay hidden">
-      <div class="overlay-card drone-modal-card">
-        <button class="modal-close" id="droneRecordsCloseBtn">✖</button>
-        <h2>🏆 Таблица рекордов</h2>
-        <div class="drone-rec-tabs" id="droneRecGroupTabs"></div>
-        <div class="drone-rec-tabs drone-rec-subtabs" id="droneRecItemTabs"></div>
-        <div id="droneRecordsTableWrap"></div>
-      </div>
-    </div>
-
-    <!-- Модалка «Достижения» -->
-    <div id="droneAchievementsOverlay" class="overlay hidden">
-      <div class="overlay-card drone-modal-card">
-        <button class="modal-close" id="droneAchievementsCloseBtn">✖</button>
-        <h2>🎖 Достижения</h2>
-        <div class="ach-grid" id="droneAchievementsGrid"></div>
-      </div>
-    </div>
-
     <!-- 3D-сцена полёта -->
     <div class="game-wrap drone-wrap hidden" id="droneGameWrap">
       <canvas id="droneCanvas"></canvas>
@@ -972,6 +951,27 @@
 
     <h2 style="margin-top:22px;">🏆 Достижения</h2>
     <div class="ach-grid" id="doodleAchievementsGrid"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: РЕКОРДЫ ДРОНА-РАЗВЕДЧИКА (группы: модель/модуль/заряд, у каждого — вкладка на вариант) -->
+<div class="modal hidden" id="droneRecordsModal">
+  <div class="modal-card drone-modal-card">
+    <button class="modal-close" data-close="droneRecordsModal">✖</button>
+    <h2>🏆 Таблица рекордов</h2>
+    <p class="modal-note">Игрок · очки · метры (м) · время (с) — отдельно по каждому варианту.</p>
+    <div class="records-tabs" id="droneRecGroupTabs"></div>
+    <div class="records-tabs drone-rec-subtabs" id="droneRecItemTabs"></div>
+    <div id="droneRecordsTableWrap"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: ДОСТИЖЕНИЯ ДРОНА-РАЗВЕДЧИКА -->
+<div class="modal hidden" id="droneAchievementsModal">
+  <div class="modal-card drone-modal-card">
+    <button class="modal-close" data-close="droneAchievementsModal">✖</button>
+    <h2>🎖 Достижения</h2>
+    <div class="ach-grid" id="droneAchievementsGrid"></div>
   </div>
 </div>
 

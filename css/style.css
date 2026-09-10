@@ -350,17 +350,13 @@ main{ position:relative; z-index:2; display:flex; justify-content:center; paddin
 .drone-progress-row{ display:flex; gap:10px; margin-top:12px; }
 .drone-progress-row .btn{ flex:1; }
 
-/* ---- модалки «Таблица рекордов» / «Достижения» дрона ---- */
-#droneRecordsOverlay.overlay, #droneAchievementsOverlay.overlay{ position:fixed; z-index:40; border-radius:0; }
+/* ---- модалки «Таблица рекордов» / «Достижения» дрона — тот же .modal/
+   .modal-card и стиль вкладок .records-tab, что у остальных игр (см. общий
+   блок стилей .modal/.records-tabs выше); тут только специфика дрона:
+   более широкая карточка (нужна под таблицу) и сама таблица рекордов ---- */
 .drone-modal-card{ max-width:560px; width:100%; max-height:82vh; overflow-y:auto; text-align:left; }
 .drone-modal-card h2{ text-align:center; }
-.drone-rec-tabs{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; justify-content:center; }
-.drone-rec-subtabs{ margin-top:8px; }
-.drone-rec-tab{
-  border:2px solid #EADFC8; background: var(--cream); color: var(--caramel-dark);
-  font-weight:700; font-size:0.82rem; padding:6px 12px; border-radius:12px; cursor:pointer;
-}
-.drone-rec-tab.active{ background: linear-gradient(180deg,#FFCE54,var(--gold)); border-color: var(--gold); color:#5a3d12; }
+.drone-rec-subtabs{ margin-top:4px; }
 .drone-rec-table{ width:100%; border-collapse:collapse; margin-top:14px; font-size:0.88rem; }
 .drone-rec-table th, .drone-rec-table td{ padding:7px 8px; text-align:center; border-bottom:1px solid #EADFC8; }
 .drone-rec-table th{ color:#8a6a45; font-size:0.78rem; text-transform:uppercase; }
