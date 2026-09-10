@@ -51,6 +51,37 @@ const KAMIKAZE_DRONE_MODELS = {
     fpv3d: { name: 'FPV 3D-модель', file: 'models/kamikaze drones/fpv_drone_3d_model.glb' },
 };
 /* =========================================================
+   3D-МОДЕЛИ МЕСТНОСТИ И НАЗЕМНЫХ/ВОЗДУШНЫХ ЦЕЛЕЙ (GLB, /models)
+   ---------------------------------------------------------
+   Карта (кластеры леса), солдат, танки, вертолёты и вся техника —
+   реальные GLB-модели из соответствующих папок. Используется КАЖДАЯ
+   модель из каждой папки минимум один раз (см. buildScene ниже).
+========================================================= */
+const MAP_GLB_FOREST = 'models/maps/low_poly_forest.glb';
+const SOLDIER_GLB = 'models/Soldier/ukrainian_azov_brigade_fighter.glb';
+const TANK_GLB_MODELS = [
+    'models/tanks/t-72amt.glb',
+    'models/tanks/t-84_oplot.glb',
+    'models/tanks/ukrainian_t-64bv_donbass_war.glb',
+];
+const HELI_GLB_MODELS = [
+    'models/vertolet/ukrainian_mil_mi-24p.glb',
+    'models/vertolet/w-3wa_sokol.glb',
+];
+// Каждая модель машины — своя манера поведения: часть вооружена и
+// стреляет, часть безоружна; часть стоит на месте, часть патрулирует
+// случайными точками, часть при приближении дрона удирает.
+const MACHINE_GLB_CONFIGS = [
+    { file: 'models/machine/bmp-1u_shkval.glb', armed: true, moveMode: 'patrol', hp: 70, bulletDamage: 16, fireRange: 100, radius: 1.9, scale: 4.6 },
+    { file: 'models/machine/ukrainian_bm-27_uragan.glb', armed: true, moveMode: 'stationary', hp: 65, bulletDamage: 22, fireRange: 140, radius: 2.3, scale: 5.4 },
+    { file: 'models/machine/ukrainian_amz_dzik.glb', armed: true, moveMode: 'flee', hp: 40, bulletDamage: 10, fireRange: 75, radius: 1.6, scale: 3.8, fleeSpeed: 12 },
+    { file: 'models/machine/ukrainian_modified_humvee.glb', armed: true, moveMode: 'flee', hp: 35, bulletDamage: 9, fireRange: 70, radius: 1.5, scale: 3.6, fleeSpeed: 13 },
+    { file: 'models/machine/ukrainian_m998_humvee_pickup.glb', armed: false, moveMode: 'flee', hp: 30, radius: 1.5, scale: 3.6, fleeSpeed: 13 },
+    { file: 'models/machine/ukrainian_kraz-6322.glb', armed: false, moveMode: 'stationary', hp: 50, radius: 1.9, scale: 4.4 },
+    { file: 'models/machine/ukrainian_uaz-452.glb', armed: false, moveMode: 'patrol', hp: 30, radius: 1.5, scale: 3.4 },
+    { file: 'models/machine/ukrainian_uaz-469.glb', armed: false, moveMode: 'flee', hp: 28, radius: 1.4, scale: 3.2, fleeSpeed: 14 },
+];
+/* =========================================================
    МЕЛКИЕ УТИЛИТЫ
 ========================================================= */
 function droneShow(el) { if (el)
@@ -112,6 +143,7 @@ const DroneGame = {
     camLookPos: null,
     obstacles: [], // деревья + техника-помеха (только коллизия)
     enemies: [],
+    squads: [], // группы солдат, бродящих вместе (см. addSoldierSquad)
     bullets: [],
     bombs: [],
     fx: [], // временные частицы
@@ -781,6 +813,33 @@ const DroneGame = {
             console.error('[drone] Модель гранаты не загружена, использую заглушку:', err);
         });
     },
+    // Универсальная асинхронная подмена плейсхолдера реальной GLB-моделью
+    // для любой наземной/воздушной цели (солдат, танк, машина, вертолёт,
+    // кластер леса). Удаляет из targetGroup только явно переданные
+    // плейсхолдер-объекты (opts.removeObjects), не трогая служебные
+    // дочерние объекты вроде точки наведения турели (e.turret).
+    attachGlbVisual(targetGroup, path, scale, opts) {
+        opts = opts || {};
+        this.loadGLTFModel(path).then((scene) => {
+            // сцена/объект могли исчезнуть (рестарт, выход, уничтожение цели),
+            // пока модель качалась
+            if (!this.scene || !targetGroup.parent)
+                return;
+            const visual = this.fitGlbVisual(scene, scale);
+            if (opts.rotationY)
+                visual.rotation.y += opts.rotationY;
+            if (opts.removeObjects) {
+                opts.removeObjects.forEach((obj) => {
+                    if (obj && obj.parent === targetGroup)
+                        targetGroup.remove(obj);
+                });
+            }
+            targetGroup.add(visual);
+        }).catch((err) => {
+            // не удалось загрузить модель — остаётся процедурная заглушка
+            console.error('[drone] Визуал цели не загружен, использую заглушку:', path, err);
+        });
+    },
     buildScene() {
         const model = DRONE_MODELS[this.selectedModel];
         const charge = DRONE_CHARGES[this.selectedCharge];
@@ -808,6 +867,7 @@ const DroneGame = {
         scene.add(ground);
         this.obstacles = [];
         this.enemies = [];
+        this.squads = [];
         this.bullets = [];
         this.bombs = [];
         this.fx = [];
@@ -846,28 +906,65 @@ const DroneGame = {
             if (Math.random() < 0.55)
                 this.addTree(x, z);
         }
-        // солдаты
-        for (let i = 0; i < 10; i++) {
-            const x = droneRandRange(-190, 190);
-            const z = droneRandRange(-400, -15);
-            this.addSoldier(x, z);
+        // декоративные кластеры карты (models/maps/low_poly_forest.glb) —
+        // крупные скопления леса по краям поля, тоже препятствие
+        for (let i = 0; i < 9; i++) {
+            const side = Math.random() < 0.5 ? -1 : 1;
+            const x = side * droneRandRange(150, 232);
+            const z = droneRandRange(-430, 40);
+            this.addForestCluster(x, z);
         }
-        // танки
-        for (let i = 0; i < 3; i++) {
+        // танки — используем все 3 модели из models/tanks, часть стоит на
+        // месте, часть медленно патрулирует случайные точки поля
+        const tankSpawns = [
+            { file: TANK_GLB_MODELS[0], mode: 'stationary' },
+            { file: TANK_GLB_MODELS[1], mode: 'patrol' },
+            { file: TANK_GLB_MODELS[2], mode: 'patrol' },
+            { file: TANK_GLB_MODELS[0], mode: 'stationary' },
+        ];
+        tankSpawns.forEach((cfg) => {
             const x = droneRandRange(-160, 160);
             const z = droneRandRange(-380, -60);
-            this.addTank(x, z);
-        }
-        // техничка с пулемётом — курсирует по дорогам
-        for (let i = 0; i < 3; i++) {
+            this.addTankEntity(x, z, cfg.file, cfg.mode);
+        });
+        // машины — используем ВСЕ модели из models/machine, каждой своя
+        // манера поведения (см. MACHINE_GLB_CONFIGS): часть стоит, часть
+        // патрулирует случайную траекторию, часть удирает от дрона
+        MACHINE_GLB_CONFIGS.forEach((cfg, i) => {
             const rx = roadXs[i % roadXs.length];
-            this.addTruck(rx, -200 + i * 40, true);
+            const onRoad = Math.random() < 0.5;
+            const x = onRoad ? droneClamp(rx + droneRandRange(-4, 4), -230, 230) : droneRandRange(-210, 210);
+            const z = droneRandRange(-410, -30);
+            this.addMachineEntity(cfg, x, z);
+        });
+        // солдаты: несколько групп по 2-4 человека, патрулирующих поле
+        // случайным маршрутом (не по прямой)
+        const squadCount = 3;
+        for (let s = 0; s < squadCount; s++) {
+            const cx = droneRandRange(-180, 180);
+            const cz = droneRandRange(-380, -40);
+            const count = 2 + Math.floor(Math.random() * 3); // 2-4 человека
+            this.addSoldierSquad(cx, cz, count);
         }
-        // обычные машины — просто помеха
-        for (let i = 0; i < 5; i++) {
-            const rx = roadXs[i % roadXs.length];
-            this.addTruck(rx, -100 - i * 55, false);
-        }
+        // солдаты-часовые: стоят на месте рядом со стоящими танками/машинами
+        this.enemies
+            .filter((e) => (e.kind === 'tank' || e.kind === 'machine') && e.moveMode === 'stationary')
+            .forEach((e) => {
+            if (Math.random() < 0.75) {
+                const ang = Math.random() * Math.PI * 2;
+                const gx = e.basePos.x + Math.cos(ang) * (e.obstacle.radius + 1.6);
+                const gz = e.basePos.z + Math.sin(ang) * (e.obstacle.radius + 1.6);
+                this.addSoldierEntity(gx, gz, { moveMode: 'stationary' });
+            }
+        });
+        // вертолёты — используем обе модели из models/vertolet, летают
+        // случайной 3D-траекторией (высота/курс) и стреляют по дрону
+        const heliSpawns = [HELI_GLB_MODELS[0], HELI_GLB_MODELS[1], HELI_GLB_MODELS[0]];
+        heliSpawns.forEach((file) => {
+            const x = droneRandRange(-170, 170);
+            const z = droneRandRange(-360, -50);
+            this.addHelicopterEntity(file, x, z);
+        });
         // дрон: сначала процедурная заглушка (мгновенно доступна), затем
         // асинхронно подменяется настоящей GLB-моделью из папки /models.
         this.droneGroup = this.buildDroneMesh(model.color, model.size);
@@ -976,8 +1073,25 @@ const DroneGame = {
         group.scale.setScalar(scale);
         return group;
     },
+    /* ---- декоративный кластер леса из карты (models/maps) ---- */
+    addForestCluster(x, z) {
+        const group = new THREE.Group();
+        const placeholder = new THREE.Mesh(new THREE.ConeGeometry(3, 6, 7), new THREE.MeshLambertMaterial({ color: 0x2f7a3a }));
+        placeholder.position.y = 3;
+        group.add(placeholder);
+        group.position.set(x, 0, z);
+        group.rotation.y = Math.random() * Math.PI * 2;
+        this.scene.add(group);
+        this.attachGlbVisual(group, MAP_GLB_FOREST, droneRandRange(20, 30), { removeObjects: [placeholder] });
+        // крупный кластер — широкий радиус коллизии, как у купы деревьев
+        this.obstacles.push({ x, z, radius: 9, height: 14 });
+    },
     /* ---- враги ---- */
-    addSoldier(x, z) {
+    // Один солдат (модель ukrainian_azov_brigade_fighter.glb). opts.moveMode:
+    // 'stationary' — стоит на месте (часовой у техники, может доворачиваться
+    // и стрелять); 'squad' — идёт в составе группы (opts.squad/opts.offset).
+    addSoldierEntity(x, z, opts) {
+        opts = opts || {};
         const group = new THREE.Group();
         const uniform = new THREE.MeshLambertMaterial({ color: 0x4c5a35 });
         const body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 1.1, 8), uniform);
@@ -986,99 +1100,124 @@ const DroneGame = {
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), new THREE.MeshLambertMaterial({ color: 0xd8a878 }));
         head.position.y = 1.45;
         group.add(head);
-        const gun = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.9), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-        gun.position.set(0.22, 0.9, 0.2);
-        group.add(gun);
         group.position.set(x, 0, z);
         this.scene.add(group);
+        this.attachGlbVisual(group, SOLDIER_GLB, 2.0, { removeObjects: [body, head] });
         // солдат тоже считается препятствием для столкновения — врезаться в
         // него можно и это подрывает камикадзе / крушит обычный дрон
         const soldierObstacle = { x, z, radius: 0.9, height: 2.3, destroyed: false };
         this.obstacles.push(soldierObstacle);
+        const moveMode = opts.moveMode || 'stationary';
+        // турель-заглушка (доворот всего тела к цели) — только у неподвижных
+        // часовых; у идущих в группе солдат тело смотрит по ходу движения
+        const turret = moveMode === 'stationary' ? group : null;
         this.enemies.push({
-            kind: 'soldier', group, turret: group,
-            basePos: { x, z }, amp: droneRandRange(4, 9), axis: Math.random() < 0.5 ? 'x' : 'z',
-            phase: Math.random() * Math.PI * 2, speedFactor: droneRandRange(0.25, 0.45),
+            kind: 'soldier', group, turret,
+            basePos: { x, z }, moveMode,
+            squad: opts.squad || null, offset: opts.offset || null, walkSpeed: opts.walkSpeed || 2,
             fireRange: 80, fireCooldown: droneRandRange(1, 3),
             fireCooldownRange: [1.4, 2.8], bulletSpeed: 42, bulletDamage: 7,
             bulletColor: 0xfff07a, spread: 0.05, collideRadius: 0.9,
             hp: 25, score: 100, destroyed: false, obstacle: soldierObstacle,
         });
     },
-    addTank(x, z) {
+    // Группа солдат (2-4 человека), которая вместе бродит по случайным
+    // точкам вокруг центра (cx,cz) — общий "виртуальный лидер" squad.pos,
+    // каждый солдат идёт к нему со своим небольшим смещением.
+    addSoldierSquad(cx, cz, count) {
+        const squad = {
+            center: { x: cx, z: cz }, pos: { x: cx, z: cz },
+            radius: droneRandRange(25, 50), speed: droneRandRange(1.6, 2.6), target: null,
+        };
+        this.squads.push(squad);
+        for (let i = 0; i < count; i++) {
+            const offset = { x: droneRandRange(-2.5, 2.5), z: droneRandRange(-2.5, 2.5) };
+            const x = cx + offset.x, z = cz + offset.z;
+            this.addSoldierEntity(x, z, { moveMode: 'squad', squad, offset, walkSpeed: squad.speed * droneRandRange(0.85, 1.15) });
+        }
+    },
+    // Танк (одна из моделей models/tanks). moveMode: 'stationary' — стоит на
+    // месте, 'patrol' — медленно ездит по случайным точкам вокруг спавна.
+    addTankEntity(x, z, glbFile, moveMode) {
         const group = new THREE.Group();
-        const hull = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 3.6), new THREE.MeshLambertMaterial({ color: 0x4a5a3a }));
-        hull.position.y = 0.55;
-        group.add(hull);
-        const turretGroup = new THREE.Group();
+        const hullPlaceholder = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 3.6), new THREE.MeshLambertMaterial({ color: 0x4a5a3a }));
+        hullPlaceholder.position.y = 0.55;
+        group.add(hullPlaceholder);
+        // невидимая точка наведения башни — используется только для расчёта
+        // угла доворота на цель, отдельно от курса движения корпуса
+        const turretGroup = new THREE.Object3D();
         turretGroup.position.set(0, 1.05, 0);
-        const turretBody = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.0, 0.6, 8), new THREE.MeshLambertMaterial({ color: 0x3d4a30 }));
-        turretGroup.add(turretBody);
-        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.2, 8), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-        barrel.rotation.x = Math.PI / 2;
-        barrel.position.set(0, 0.1, -1.3);
-        turretGroup.add(barrel);
         group.add(turretGroup);
         group.position.set(x, 0, z);
         this.scene.add(group);
-        const tankObstacle = { x, z, radius: 2.4, height: 2.2, destroyed: false };
+        this.attachGlbVisual(group, glbFile, 5.4, { removeObjects: [hullPlaceholder] });
+        const tankObstacle = { x, z, radius: 2.4, height: 2.4, destroyed: false };
         this.obstacles.push(tankObstacle);
         this.enemies.push({
             kind: 'tank', group, turret: turretGroup,
-            basePos: { x, z }, amp: droneRandRange(3, 6), axis: Math.random() < 0.5 ? 'x' : 'z',
-            phase: Math.random() * Math.PI * 2, speedFactor: 0.08,
+            basePos: { x, z }, wanderCenter: { x, z }, wanderRadius: droneRandRange(18, 30),
+            moveMode, patrolSpeed: droneRandRange(2.2, 3.4), canFlee: false, _target: null,
             fireRange: 150, fireCooldown: droneRandRange(2, 4),
             fireCooldownRange: [3.5, 5.2], bulletSpeed: 58, bulletDamage: 28,
             bulletColor: 0xff8a3d, spread: 0.02, collideRadius: 2.2,
             hp: 90, score: 300, destroyed: false, obstacle: tankObstacle,
         });
     },
-    addTruck(x, z, armed) {
+    // Машина (одна из моделей models/machine, см. MACHINE_GLB_CONFIGS).
+    // moveMode: 'stationary' — стоит; 'patrol' — едет случайной траекторией
+    // между точками; 'flee' — обычно патрулирует, но завидев дрон вблизи
+    // удирает в противоположную сторону.
+    addMachineEntity(cfg, x, z) {
         const group = new THREE.Group();
-        const bodyColor = armed ? 0x8a7a4a : [0xb03a3a, 0x3a5fb0, 0xc9c9c9, 0x3a8a4a][Math.floor(Math.random() * 4)];
-        const hull = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.1, 3.4), new THREE.MeshLambertMaterial({ color: bodyColor }));
-        hull.position.y = 0.65;
-        group.add(hull);
-        const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.7, 1.1), new THREE.MeshLambertMaterial({ color: 0xdedede }));
-        cabin.position.set(0, 1.25, 1.1);
-        group.add(cabin);
-        let turret = null;
-        if (armed) {
-            turret = new THREE.Group();
-            turret.position.set(0, 1.25, -0.6);
-            const mg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.3, 6), new THREE.MeshLambertMaterial({ color: 0x1c1c1c }));
-            mg.rotation.x = Math.PI / 2;
-            mg.position.z = -0.6;
-            turret.add(mg);
-            const gunner = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 6), new THREE.MeshLambertMaterial({ color: 0x4c5a35 }));
-            turret.add(gunner);
-            group.add(turret);
+        const placeholder = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 3.2), new THREE.MeshLambertMaterial({ color: 0x777a63 }));
+        placeholder.position.y = 0.6;
+        group.add(placeholder);
+        // невидимая точка наведения (аналог турели) — только у вооружённых машин
+        let turretRef = null;
+        if (cfg.armed) {
+            turretRef = new THREE.Object3D();
+            turretRef.position.set(0, 1.2, 0);
+            group.add(turretRef);
         }
         group.position.set(x, 0, z);
-        group.rotation.y = Math.PI / 2;
         this.scene.add(group);
-        const truckObstacle = { x, z, radius: 1.8, height: 1.8, destroyed: false };
-        this.obstacles.push(truckObstacle);
-        if (armed) {
-            this.enemies.push({
-                kind: 'truck', group, turret,
-                basePos: { x, z }, amp: 130, axis: 'z',
-                phase: 0, speedFactor: 0.5,
-                fireRange: 95, fireCooldown: droneRandRange(1.5, 3),
-                fireCooldownRange: [0.9, 1.7], bulletSpeed: 48, bulletDamage: 11,
-                bulletColor: 0xffe08a, spread: 0.06, collideRadius: 1.6,
-            });
-        }
-        else {
-            this.enemies.push({
-                kind: 'truck', group, turret: null,
-                basePos: { x, z }, amp: 130, axis: 'z',
-                phase: 0, speedFactor: 0.35,
-                fireRange: 0, fireCooldown: 999, fireCooldownRange: [999, 999],
-                bulletSpeed: 0, bulletDamage: 0, bulletColor: 0, spread: 0, collideRadius: 1.6,
-                hp: 45, score: 0, destroyed: false, obstacle: truckObstacle,
-            });
-        }
+        this.attachGlbVisual(group, cfg.file, cfg.scale || 4.2, { removeObjects: [placeholder] });
+        const obstacle = { x, z, radius: cfg.radius || 1.8, height: cfg.height || 2.0, destroyed: false };
+        this.obstacles.push(obstacle);
+        this.enemies.push({
+            kind: 'machine', group, turret: turretRef,
+            basePos: { x, z }, wanderCenter: { x, z }, wanderRadius: cfg.wanderRadius || droneRandRange(24, 50),
+            moveMode: cfg.moveMode, patrolSpeed: cfg.patrolSpeed || droneRandRange(3.5, 6.5),
+            fleeSpeed: cfg.fleeSpeed || droneRandRange(10, 14), canFlee: cfg.moveMode === 'flee',
+            fleeRange: cfg.fleeRange || 55, _target: null,
+            fireRange: cfg.armed ? (cfg.fireRange || 90) : 0,
+            fireCooldown: droneRandRange(1, 3), fireCooldownRange: cfg.armed ? (cfg.fireCooldownRange || [1.2, 2.4]) : [999, 999],
+            bulletSpeed: 48, bulletDamage: cfg.bulletDamage || 10, bulletColor: 0xffe08a, spread: 0.06,
+            collideRadius: cfg.radius || 1.8,
+            hp: cfg.hp || 45, score: cfg.armed ? 220 : 0, destroyed: false, obstacle,
+        });
+    },
+    // Вертолёт (models/vertolet) — летает случайной 3D-траекторией (курс +
+    // высота), может подниматься/опускаться, кренится/клюёт носом на
+    // виражах для правдоподобия, стреляет по дрону. Коллизия с дроном
+    // проверяется отдельно, в 3D (см. updateEnemies), в this.obstacles не
+    // добавляется — это не наземное препятствие с фиксированной высотой.
+    addHelicopterEntity(file, x, z) {
+        const group = new THREE.Group();
+        const placeholder = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 3.4), new THREE.MeshLambertMaterial({ color: 0x545f47 }));
+        group.add(placeholder);
+        const altitude = droneRandRange(18, 38);
+        group.position.set(x, altitude, z);
+        this.scene.add(group);
+        this.attachGlbVisual(group, file, 6.5, { removeObjects: [placeholder] });
+        this.enemies.push({
+            kind: 'heli', group, turret: null,
+            basePos: { x, z }, wanderCenter: { x, z }, wanderRadiusXZ: droneRandRange(70, 120),
+            altRange: [16, 42], target: null, moveMode: 'heli', speed: droneRandRange(11, 17),
+            fireRange: 125, fireCooldown: droneRandRange(2, 4), fireCooldownRange: [2.2, 3.8],
+            bulletSpeed: 55, bulletDamage: 14, bulletColor: 0xff5533, spread: 0.05,
+            collideRadius: 3.0, hp: 75, score: 280, destroyed: false, _bank: 0, _pitch: 0,
+        });
     },
     /* =========================================================
        ИГРОВОЙ ЦИКЛ
@@ -1232,7 +1371,8 @@ const DroneGame = {
             this.handleCrash('Дрон улетел за пределы зоны полёта');
             return;
         }
-        this.checkObstacleCollisions(model.size * 0.7);
+        this._droneRadius = model.size * 0.7;
+        this.checkObstacleCollisions(this._droneRadius);
         this.updateEnemies(dt);
         this.updateBullets(dt);
         this.updateBombs(dt);
@@ -1271,28 +1411,150 @@ const DroneGame = {
             }
         }
     },
+    /* ---- движение групп солдат: общая "виртуальная точка сбора" squad.pos
+       бродит по случайным точкам вокруг squad.center, каждый солдат группы
+       идёт к ней со своим личным смещением (см. addSoldierSquad) ---- */
+    updateSquads(dt) {
+        this.squads.forEach((squad) => {
+            if (!squad.target || Math.hypot(squad.target.x - squad.pos.x, squad.target.z - squad.pos.z) < 2.5) {
+                squad.target = {
+                    x: droneClamp(squad.center.x + droneRandRange(-squad.radius, squad.radius), -230, 230),
+                    z: droneClamp(squad.center.z + droneRandRange(-squad.radius, squad.radius), -440, -10),
+                };
+            }
+            const dx = squad.target.x - squad.pos.x, dz = squad.target.z - squad.pos.z;
+            const dist = Math.hypot(dx, dz) || 1;
+            const step = Math.min(dist, squad.speed * dt);
+            squad.pos.x += dx / dist * step;
+            squad.pos.z += dz / dist * step;
+        });
+    },
+    // Доворачивает group.rotation.y к направлению (dx,dz) с ограниченной
+    // угловой скоростью — общая функция для правдоподобного разворота
+    // техники/солдат/вертолёта по ходу движения.
+    _turnTowards(group, dx, dz, dt, rate) {
+        const heading = Math.atan2(dx, dz);
+        let diff = heading - group.rotation.y;
+        while (diff > Math.PI)
+            diff -= Math.PI * 2;
+        while (diff < -Math.PI)
+            diff += Math.PI * 2;
+        group.rotation.y += droneClamp(diff, -dt * rate, dt * rate);
+    },
+    // Идущий в группе солдат — тянется к (squad.pos + личное смещение).
+    updateSquadMember(e, dt) {
+        const squad = e.squad;
+        if (!squad)
+            return;
+        const tx = squad.pos.x + e.offset.x, tz = squad.pos.z + e.offset.z;
+        const dx = tx - e.group.position.x, dz = tz - e.group.position.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist > 0.05) {
+            const step = Math.min(dist, e.walkSpeed * dt);
+            e.group.position.x += dx / dist * step;
+            e.group.position.z += dz / dist * step;
+            this._turnTowards(e.group, dx, dz, dt, 3);
+        }
+        if (e.obstacle) {
+            e.obstacle.x = e.group.position.x;
+            e.obstacle.z = e.group.position.z;
+        }
+    },
+    // Наземный "бродящий" юнит (танк/машина в режиме patrol или flee):
+    // едет случайной ломаной траекторией между точками вокруг wanderCenter;
+    // если canFlee и дрон подобрался ближе fleeRange — вместо этого едет
+    // в противоположную от дрона сторону.
+    updateGroundMover(e, dt) {
+        const px = e.group.position.x, pz = e.group.position.z;
+        const toPlayerX = this.pos.x - px, toPlayerZ = this.pos.z - pz;
+        const distToPlayer = Math.hypot(toPlayerX, toPlayerZ);
+        let tx, tz, speed;
+        if (e.canFlee && distToPlayer < e.fleeRange) {
+            const away = Math.atan2(-toPlayerX, -toPlayerZ);
+            tx = droneClamp(px + Math.sin(away) * 45, -235, 235);
+            tz = droneClamp(pz + Math.cos(away) * 45, -445, 65);
+            speed = e.fleeSpeed;
+            e._target = null; // после погони — новая точка патруля с текущего места
+        }
+        else {
+            if (!e._target || Math.hypot(e._target.x - px, e._target.z - pz) < 3) {
+                e._target = {
+                    x: droneClamp(e.wanderCenter.x + droneRandRange(-e.wanderRadius, e.wanderRadius), -235, 235),
+                    z: droneClamp(e.wanderCenter.z + droneRandRange(-e.wanderRadius, e.wanderRadius), -445, 65),
+                };
+            }
+            tx = e._target.x;
+            tz = e._target.z;
+            speed = e.patrolSpeed;
+        }
+        const dx = tx - px, dz = tz - pz;
+        const dist = Math.hypot(dx, dz) || 1;
+        const step = Math.min(dist, speed * dt);
+        e.group.position.x = px + dx / dist * step;
+        e.group.position.z = pz + dz / dist * step;
+        if (step > 0.001)
+            this._turnTowards(e.group, dx, dz, dt, 2.2);
+        if (e.obstacle) {
+            e.obstacle.x = e.group.position.x;
+            e.obstacle.z = e.group.position.z;
+        }
+    },
+    // Вертолёт: случайно выбирает следующую точку (x,z,высота) в пределах
+    // wanderRadiusXZ/altRange от точки спавна, плавно летит к ней, кренится
+    // на разворотах и слегка "клюёт носом" в движении — для правдоподобия.
+    updateHeli(e, dt) {
+        const px = e.group.position.x, pz = e.group.position.z;
+        if (!e.target || Math.hypot(e.target.x - px, e.target.z - pz) < 5) {
+            e.target = {
+                x: droneClamp(e.wanderCenter.x + droneRandRange(-e.wanderRadiusXZ, e.wanderRadiusXZ), -240, 240),
+                z: droneClamp(e.wanderCenter.z + droneRandRange(-e.wanderRadiusXZ, e.wanderRadiusXZ), -450, 60),
+                y: droneRandRange(e.altRange[0], e.altRange[1]),
+            };
+        }
+        const dx = e.target.x - px, dz = e.target.z - pz;
+        const distXZ = Math.hypot(dx, dz) || 1;
+        const step = Math.min(distXZ, e.speed * dt);
+        e.group.position.x = px + dx / distXZ * step;
+        e.group.position.z = pz + dz / distXZ * step;
+        e.group.position.y = droneApproach(e.group.position.y, e.target.y, 3.5 * dt);
+        if (step > 0.001) {
+            this._turnTowards(e.group, dx, dz, dt, 1.3);
+            let diff = Math.atan2(dx, dz) - e.group.rotation.y;
+            while (diff > Math.PI)
+                diff -= Math.PI * 2;
+            while (diff < -Math.PI)
+                diff += Math.PI * 2;
+            e._bank = droneApproach(e._bank || 0, droneClamp(-diff * 1.6, -0.5, 0.5), dt * 2.2);
+            e._pitch = droneApproach(e._pitch || 0, -0.12, dt * 2);
+        }
+        else {
+            e._bank = droneApproach(e._bank || 0, 0, dt * 1.5);
+            e._pitch = droneApproach(e._pitch || 0, 0, dt * 1.5);
+        }
+        e.group.rotation.z = e._bank;
+        e.group.rotation.x = e._pitch;
+    },
     updateEnemies(dt) {
+        this.updateSquads(dt);
         for (let i = 0; i < this.enemies.length; i++) {
             const e = this.enemies[i];
             if (e.destroyed)
                 continue;
-            e.phase += dt * e.speedFactor;
-            const off = Math.sin(e.phase) * e.amp;
-            if (e.axis === 'x')
-                e.group.position.x = e.basePos.x + off;
-            else
-                e.group.position.z = e.basePos.z + off;
-            // столкновение должно следовать за патрулирующей техникой/солдатом,
-            // а не оставаться на точке появления
-            if (e.obstacle) {
-                e.obstacle.x = e.group.position.x;
-                e.obstacle.z = e.group.position.z;
+            if (e.moveMode === 'squad')
+                this.updateSquadMember(e, dt);
+            else if (e.moveMode === 'heli')
+                this.updateHeli(e, dt);
+            else if (e.moveMode === 'stationary') {
+                // стоит на месте — ни корпус, ни точка патруля не двигаются
             }
+            else
+                this.updateGroundMover(e, dt); // 'patrol' / 'flee'
             if (e.turret && e.fireRange > 0) {
                 const dx = this.pos.x - e.turret.getWorldPosition(new THREE.Vector3()).x;
                 const dz = this.pos.z - e.turret.getWorldPosition(new THREE.Vector3()).z;
                 const targetAngle = Math.atan2(dx, dz);
-                // плавный доворот башни/пулемёта на цель
+                // плавный доворот башни/пулемёта на цель (независимо от
+                // разворота корпуса — это отдельный дочерний объект)
                 let cur = e.turret.rotation.y;
                 let diff = targetAngle - cur;
                 while (diff > Math.PI)
@@ -1300,6 +1562,18 @@ const DroneGame = {
                 while (diff < -Math.PI)
                     diff += Math.PI * 2;
                 e.turret.rotation.y = cur + droneClamp(diff, -dt * 3, dt * 3);
+            }
+            // вертолёт — столкновение проверяем в 3D (высота у него не
+            // фиксирована, как у наземных this.obstacles)
+            if (e.kind === 'heli') {
+                const ddx = this.pos.x - e.group.position.x;
+                const ddy = this.pos.y - e.group.position.y;
+                const ddz = this.pos.z - e.group.position.z;
+                const rr = e.collideRadius + (this._droneRadius || 0.6);
+                if (ddx * ddx + ddy * ddy + ddz * ddz < rr * rr) {
+                    this.handleCrash('Дрон столкнулся с вертолётом');
+                    return;
+                }
             }
             if (e.fireRange <= 0)
                 continue;
@@ -1313,7 +1587,7 @@ const DroneGame = {
     },
     fireBullet(e) {
         const origin = e.group.position.clone();
-        origin.y += e.kind === 'soldier' ? 1.2 : (e.kind === 'tank' ? 1.5 : 1.3);
+        origin.y += e.kind === 'soldier' ? 1.2 : (e.kind === 'tank' ? 1.5 : (e.kind === 'heli' ? 0.3 : 1.3));
         const target = this.pos.clone();
         target.x += droneRandRange(-e.spread, e.spread) * 10;
         target.y += droneRandRange(-e.spread, e.spread) * 10;
@@ -1714,6 +1988,7 @@ const DroneGame = {
         this.droneGroup = null;
         this.obstacles = [];
         this.enemies = [];
+        this.squads = [];
         this.bullets = [];
         this.bombs = [];
         this.fx = [];
