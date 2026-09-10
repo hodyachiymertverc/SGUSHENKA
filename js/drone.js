@@ -49,7 +49,6 @@ const KAMIKAZE_DRONE_MODELS = {
     combat: { name: 'Комбат', file: 'models/kamikaze drones/combat__fpv_drone.glb' },
     fpv: { name: 'FPV дрон', file: 'models/kamikaze drones/fpv_drone.glb' },
     fpv3d: { name: 'FPV 3D-модель', file: 'models/kamikaze drones/fpv_drone_3d_model.glb' },
-    realistic: { name: 'Реалистичный', file: 'models/kamikaze drones/realistic_fpv_kamikaze_drone.glb' },
 };
 /* =========================================================
    МЕЛКИЕ УТИЛИТЫ
@@ -155,59 +154,6 @@ const DroneGame = {
         window.addEventListener('pagehide', () => this.saveProgressOnExit());
         window.addEventListener('beforeunload', () => this.saveProgressOnExit());
         this.initProgress();
-        this.initPickPreviews();
-    },
-    /* =========================================================
-       ЖИВЫЕ 3D-ПРЕВЬЮ МОДЕЛЕЙ В МЕНЮ ВЫБОРА
-       ---------------------------------------------------------
-       В пункте «Боевой модуль» на варианте «Бомба» показывается
-       вращающаяся модель fpv_drone.glb (та, что реально летает в
-       игре в этом режиме, см. DRONE_GLB_BOMB_LOADOUT), а сама
-       бомба при сбросе — модель grenade_f1.glb (см. attachGrenadeVisual).
-       В пункте «Модель дрона-камикадзе» — по превью на каждый из 4
-       вариантов из models/kamikaze drones, чтобы сразу было видно,
-       какой дрон выбираешь.
-    ========================================================= */
-    initPickPreviews() {
-        if (typeof THREE === 'undefined')
-            return;
-        document.querySelectorAll('.game-pick-model-canvas[data-glb]').forEach((canvas) => {
-            this.mountModelPreview(canvas, canvas.dataset.glb);
-        });
-    },
-    mountModelPreview(canvas, glbPath) {
-        let renderer;
-        try {
-            renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-        }
-        catch (e) {
-            return; // WebGL недоступен — превью просто не показывается, ошибка не критична
-        }
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        const w = canvas.width || 160, h = canvas.height || 112;
-        renderer.setSize(w, h, false);
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(32, w / h, 0.1, 50);
-        camera.position.set(0.4, 0.55, 2.6);
-        camera.lookAt(0, 0, 0);
-        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-        const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-        dir.position.set(2, 3, 2);
-        scene.add(dir);
-        const holder = new THREE.Group();
-        scene.add(holder);
-        this.loadGLTFModel(glbPath).then((gltfScene) => {
-            const visual = this.fitGlbVisual(gltfScene, 1.5);
-            holder.add(visual);
-        }).catch(() => { /* модель не загрузилась — превью остаётся пустым фоном, игра не ломается */ });
-        const animate = () => {
-            if (!canvas.isConnected)
-                return; // карточка удалена из DOM — останавливаем цикл рендера
-            holder.rotation.y += 0.014;
-            renderer.render(scene, camera);
-            requestAnimationFrame(animate);
-        };
-        requestAnimationFrame(animate);
     },
     bindSetupUI() {
         const pickBtn = document.getElementById('pickDroneBtn');
@@ -584,8 +530,11 @@ const DroneGame = {
        игрок, если вылет прерывается не крушением, а обычным выходом
        (кнопка «Выход», переход в меню, закрытие вкладки) ---- */
     saveProgressOnExit() {
-        if (this.dead || !this.hasTakenOff)
-            return; // ещё не взлетал либо итог уже посчитан в finalizeRun()
+        // сохраняем, если игрок успел хоть что-то налетать/заработать —
+        // не обязательно именно набрать высоту «официального взлёта»
+        const hasProgress = this.hasTakenOff || this.score > 0 || this.distance > 0 || this.timeAlive > 0;
+        if (this.dead || !hasProgress)
+            return; // ещё ничего не успел, либо итог уже посчитан в finalizeRun()
         this.dead = true; // не даём finalizeRun/крушению сработать повторно на этом вылете
         this.submitOptionRecords();
         if (window.DB && this.playerId) {
@@ -1045,7 +994,7 @@ const DroneGame = {
         this.scene.add(group);
         // солдат тоже считается препятствием для столкновения — врезаться в
         // него можно и это подрывает камикадзе / крушит обычный дрон
-        const soldierObstacle = { x, z, radius: 0.65, height: 1.9, destroyed: false };
+        const soldierObstacle = { x, z, radius: 0.9, height: 2.3, destroyed: false };
         this.obstacles.push(soldierObstacle);
         this.enemies.push({
             kind: 'soldier', group, turret: group,
