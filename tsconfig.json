@@ -11,5 +11,5 @@
     "sourceMap": false,
     "newLine": "lf"
   },
-  "include": ["ts/**/*.ts"]
+  "include": ["ts/snake.ts"]
 }

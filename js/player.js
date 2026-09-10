@@ -19,7 +19,8 @@ const KEYS = {
   music: 'gd_music_on',
   lastSeenNews: 'gd_last_seen_news_ts',
   votes: 'gd_news_votes',
-  doodleControlMode: 'gd_doodle_control_mode'
+  doodleControlMode: 'gd_doodle_control_mode',
+  bestScore: 'gd_best_score' // личный рекорд в игре «Лови сгущёнку» (см. script.js: endGame)
 };
 
 /* уникальный ID этого устройства/игрока — общий для игры, кликера,

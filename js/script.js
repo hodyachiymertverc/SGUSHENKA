@@ -2,7 +2,7 @@
    НАСТРОЙКА ЗВУКОВ
 ========================================================= */
 const SOUND_CONFIG = {
-  goodCount: 3,
+  goodCount: 4,
   badCount: 3,
   goodPath: 'sound/good/good',
   badPath: 'sound/bad/bad',
@@ -470,7 +470,15 @@ function endGame(reason){
   submitScore(score);
   document.getElementById('finalScore').textContent = score;
   document.getElementById('gameOverTitle').textContent = reason === 'bomb' ? '💥 Бум! Игра окончена' : 'Игра окончена';
-  document.getElementById('newRecordText').classList.add('hidden');
+  // личный рекорд игрока в этой игре хранится локально (как и в остальных
+  // играх сайта — см. isNewRecord в snake.js/doodle.js/drone.js), чтобы
+  // не ждать ответа от облака: раньше здесь блок с рекордом всегда просто
+  // прятался и никогда не показывался, даже если игрок реально побил
+  // свой предыдущий лучший результат
+  const prevBest = LocalPrefs.get(KEYS.bestScore, 0);
+  const isNewRecord = score > prevBest && score > 0;
+  if(isNewRecord) LocalPrefs.set(KEYS.bestScore, score);
+  document.getElementById('newRecordText').classList.toggle('hidden', !isNewRecord);
   show(gameOverOverlay);
 }
 
