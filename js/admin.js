@@ -900,6 +900,49 @@ function mountAllConfigSections(){
   });
 
   mountTTTPlayers();
+
+  /* ---- уровни дрона-разведчика ---- */
+  mountConfigSection({
+    collection: 'droneLevels',
+    addFormElId: 'droneLevelsAddForm', addBtnId: 'droneLevelsAddBtn', listElId: 'droneLevelsList',
+    seed: (window.DEFAULTS && DEFAULTS.droneLevels) || [],
+    emptyText: 'Пока нет уровней.',
+    fields: [
+      { key:'emoji', label:'Эмодзи', type:'text', default:'🥄' },
+      { key:'name',  label:'Название', type:'text', default:'' },
+      { key:'min',   label:'От (очков всего)', type:'number', default:0 },
+      { key:'max',   label:'До (очков всего)', type:'number', default:200 }
+    ],
+    summary(item){ return { title: `${item.emoji || ''} ${item.name || ''}`, sub: `${item.min}–${item.max} очков всего за все вылеты` }; }
+  });
+
+  /* ---- достижения дрона-разведчика ---- */
+  const droneAchTypeLabels = {
+    games:'вылетов сыграно', bestScore:'рекорд очков за вылет', bestDistance:'рекорд дистанции за вылет (м)',
+    bestTime:'рекорд времени за вылет (с)', totalDistance:'дистанция всего (м)', kamikazeHits:'подрывов камикадзе всего'
+  };
+  mountConfigSection({
+    collection: 'droneAchievements',
+    addFormElId: 'droneAchievementsAddForm', addBtnId: 'droneAchievementsAddBtn', listElId: 'droneAchievementsList',
+    seed: (window.DEFAULTS && DEFAULTS.droneAchievements) || [],
+    emptyText: 'Пока нет достижений.',
+    fields: [
+      { key:'emoji', label:'Эмодзи', type:'text', default:'🏆' },
+      { key:'title', label:'Название', type:'text', default:'' },
+      { key:'desc',  label:'Описание', type:'textarea', default:'' },
+      { key:'type',  label:'Тип условия', type:'select', default:'bestScore', options: [
+        ['games','Вылетов сыграно'], ['bestScore','Рекорд очков за вылет'], ['bestDistance','Рекорд дистанции за вылет (м)'],
+        ['bestTime','Рекорд времени за вылет (с)'], ['totalDistance','Дистанция всего (м)'], ['kamikazeHits','Подрывов камикадзе всего']
+      ]},
+      { key:'target', label:'Нужное значение', type:'number', default:1 }
+    ],
+    summary(item){
+      return { title: `${item.emoji || ''} ${item.title || ''}`, sub: `${item.desc || ''} · условие: ${item.target} (${droneAchTypeLabels[item.type] || item.type})` };
+    }
+  });
+
+  mountDronePlayers();
+  mountDroneLeaderboardsAdmin();
 }
 
 /* =========================================================
@@ -1080,6 +1123,206 @@ function mountDoodlePlayers(){
 }
 
 /* =========================================================
+   ДРОН-РАЗВЕДЧИК — РЕДАКТИРОВАНИЕ СТАТИСТИКИ ИГРОКОВ
+========================================================= */
+function mountDronePlayers(){
+  const listEl = document.getElementById('dronePlayersList');
+  const searchEl = document.getElementById('dronePlayersSearch');
+  if(!listEl || !searchEl) return;
+
+  let allPlayers = [];
+  let editingId = null;
+
+  function renderPlayers(){
+    if(editingId !== null) return;
+    const q = (searchEl.value || '').trim().toLowerCase();
+    const filtered = q ? allPlayers.filter(p=> (p.name || '').toLowerCase().includes(q)) : allPlayers;
+    listEl.innerHTML = '';
+    if(!filtered.length){
+      listEl.innerHTML = '<p class="news-empty">Игроков не найдено.</p>';
+      return;
+    }
+    filtered.slice(0, 100).forEach(p=>{
+      const card = document.createElement('div');
+      card.className = 'admin-list-item';
+      card.innerHTML = `
+        <div class="row">
+          <div class="info">
+            <div class="cfg-item-title">${escapeHtml(p.name || 'Без имени')}</div>
+            <div class="cfg-item-sub">Рекорд очков: ${Math.floor(p.bestScore || 0)} · Рекорд дистанции: ${Math.floor(p.bestDistance || 0)} м · Рекорд времени: ${Math.floor(p.bestTime || 0)} с · Вылетов: ${p.gamesPlayed || 0} · Подрывов камикадзе: ${p.kamikazeHits || 0}</div>
+          </div>
+          <div class="actions">
+            <button class="mini-btn view-btn" data-editdrp="1">✏️ Изменить</button>
+          </div>
+        </div>
+        <div class="cfg-form hidden" data-editdrpform="1"></div>
+      `;
+      listEl.appendChild(card);
+
+      card.querySelector('[data-editdrp]').addEventListener('click', ()=>{
+        const formEl = card.querySelector('[data-editdrpform]');
+        if(!formEl.classList.contains('hidden')){
+          formEl.classList.add('hidden');
+          editingId = null;
+          renderPlayers();
+          return;
+        }
+        editingId = p.id;
+        const prefix = 'drp_' + p.id;
+        formEl.innerHTML = `
+          <label class="cfg-field wide">Никнейм<input type="text" id="${prefix}_name" value="${escapeHtml(p.name || '')}" maxlength="16"></label>
+          <label class="cfg-field">Рекорд очков (за вылет)<input type="number" id="${prefix}_best" value="${Math.floor(p.bestScore || 0)}"></label>
+          <label class="cfg-field">Очков всего<input type="number" id="${prefix}_total" value="${Math.floor(p.totalScore || 0)}"></label>
+          <label class="cfg-field">Рекорд дистанции, м<input type="number" id="${prefix}_bestdist" value="${Math.floor(p.bestDistance || 0)}"></label>
+          <label class="cfg-field">Дистанции всего, м<input type="number" id="${prefix}_totaldist" value="${Math.floor(p.totalDistance || 0)}"></label>
+          <label class="cfg-field">Рекорд времени, с<input type="number" id="${prefix}_besttime" value="${Math.floor(p.bestTime || 0)}"></label>
+          <label class="cfg-field">Вылетов сыграно<input type="number" id="${prefix}_games" value="${p.gamesPlayed || 0}"></label>
+          <label class="cfg-field">Подрывов камикадзе<input type="number" id="${prefix}_kamikaze" value="${p.kamikazeHits || 0}"></label>
+          <div class="cfg-form-actions">
+            <button class="mini-btn save-btn" type="button" data-savedrp="1">💾 Сохранить</button>
+          </div>
+        `;
+        formEl.classList.remove('hidden');
+        formEl.querySelector('[data-savedrp]').addEventListener('click', ()=>{
+          const nick = (document.getElementById(prefix + '_name').value || '').trim().slice(0, 16) || p.name;
+          DB.setItem('dronePlayers', p.id, {
+            name: nick,
+            bestScore: parseFloat(document.getElementById(prefix + '_best').value) || 0,
+            totalScore: parseFloat(document.getElementById(prefix + '_total').value) || 0,
+            bestDistance: parseFloat(document.getElementById(prefix + '_bestdist').value) || 0,
+            totalDistance: parseFloat(document.getElementById(prefix + '_totaldist').value) || 0,
+            bestTime: parseFloat(document.getElementById(prefix + '_besttime').value) || 0,
+            gamesPlayed: parseInt(document.getElementById(prefix + '_games').value, 10) || 0,
+            kamikazeHits: parseInt(document.getElementById(prefix + '_kamikaze').value, 10) || 0
+          });
+          formEl.classList.add('hidden');
+          editingId = null;
+          renderPlayers();
+        });
+      });
+    });
+  }
+
+  DB.watchCollection('dronePlayers', list=>{
+    allPlayers = list.slice().sort((a,b)=> (b.bestScore || 0) - (a.bestScore || 0));
+    renderPlayers();
+  });
+  searchEl.addEventListener('input', renderPlayers);
+}
+
+/* =========================================================
+   ДРОН-РАЗВЕДЧИК — ТАБЛИЦЫ РЕКОРДОВ ПО КАЖДОМУ ПУНКТУ ВЫБОРА
+   (модель дрона / боевой модуль / заряд батареи). Каждая таблица —
+   отдельная коллекция droneLB_<ось>_<значение> с записями вида
+   {id: playerId, name, score, distance, time} — см. submitOptionRecords()
+   в drone.js. Здесь можно посмотреть, отредактировать и удалить любую
+   запись в любой из восьми таблиц, а также очистить таблицу целиком.
+========================================================= */
+function mountDroneLeaderboardsAdmin(){
+  const selectEl = document.getElementById('droneLBSelect');
+  const listEl = document.getElementById('droneLBList');
+  const clearBtn = document.getElementById('droneLBClearBtn');
+  if(!selectEl || !listEl) return;
+
+  const OPTIONS = [
+    ['droneLB_model_scout', 'Модель дрона: Скаут'],
+    ['droneLB_model_balanced', 'Модель дрона: Баланс'],
+    ['droneLB_model_heavy', 'Модель дрона: Танк'],
+    ['droneLB_loadout_bomb', 'Боевой модуль: Бомба'],
+    ['droneLB_loadout_kamikaze', 'Боевой модуль: Камикадзе'],
+    ['droneLB_charge_s', 'Заряд батареи: Малый'],
+    ['droneLB_charge_m', 'Заряд батареи: Средний'],
+    ['droneLB_charge_l', 'Заряд батареи: Большой']
+  ];
+  selectEl.innerHTML = OPTIONS.map(([v, l])=> `<option value="${v}">${escapeHtml(l)}</option>`).join('');
+
+  let unsub = null;
+  let currentList = [];
+  let editingId = null;
+
+  function render(){
+    if(editingId !== null) return;
+    const sorted = currentList.slice().sort((a,b)=> (b.score || 0) - (a.score || 0));
+    listEl.innerHTML = '';
+    if(!sorted.length){
+      listEl.innerHTML = '<p class="news-empty">Пока нет рекордов в этой таблице.</p>';
+      return;
+    }
+    sorted.forEach((r, i)=>{
+      const card = document.createElement('div');
+      card.className = 'admin-list-item';
+      card.innerHTML = `
+        <div class="row">
+          <div class="info">
+            <div class="cfg-item-title">#${i + 1} · ${escapeHtml(r.name || 'Игрок')}</div>
+            <div class="cfg-item-sub">Очки: ${Math.floor(r.score || 0)} · Метры: ${Math.floor(r.distance || 0)} м · Время: ${Math.floor(r.time || 0)} с</div>
+          </div>
+          <div class="actions">
+            <button class="mini-btn view-btn" data-editlb="1">✏️ Изменить</button>
+            <button class="mini-btn del-btn" data-dellb="1">Удалить</button>
+          </div>
+        </div>
+        <div class="cfg-form hidden" data-editlbform="1"></div>
+      `;
+      listEl.appendChild(card);
+
+      const formEl = card.querySelector('[data-editlbform]');
+      card.querySelector('[data-editlb]').addEventListener('click', ()=>{
+        if(!formEl.classList.contains('hidden')){
+          formEl.classList.add('hidden');
+          editingId = null;
+          render();
+          return;
+        }
+        editingId = r.id;
+        const prefix = 'lb_' + r.id;
+        formEl.innerHTML = `
+          <label class="cfg-field wide">Никнейм<input type="text" id="${prefix}_name" value="${escapeHtml(r.name || '')}" maxlength="16"></label>
+          <label class="cfg-field">Очки<input type="number" id="${prefix}_score" value="${Math.floor(r.score || 0)}"></label>
+          <label class="cfg-field">Метры<input type="number" id="${prefix}_dist" value="${Math.floor(r.distance || 0)}"></label>
+          <label class="cfg-field">Время, с<input type="number" id="${prefix}_time" value="${Math.floor(r.time || 0)}"></label>
+          <div class="cfg-form-actions">
+            <button class="mini-btn save-btn" type="button" data-savelb="1">💾 Сохранить</button>
+          </div>
+        `;
+        formEl.classList.remove('hidden');
+        formEl.querySelector('[data-savelb]').addEventListener('click', ()=>{
+          DB.setItem(selectEl.value, r.id, {
+            name: (document.getElementById(prefix + '_name').value || '').trim().slice(0, 16) || r.name,
+            score: parseFloat(document.getElementById(prefix + '_score').value) || 0,
+            distance: parseFloat(document.getElementById(prefix + '_dist').value) || 0,
+            time: parseFloat(document.getElementById(prefix + '_time').value) || 0
+          });
+          formEl.classList.add('hidden');
+          editingId = null;
+          render();
+        });
+      });
+
+      card.querySelector('[data-dellb]').addEventListener('click', ()=>{
+        if(confirm('Удалить эту запись из таблицы рекордов?')) DB.deleteItem(selectEl.value, r.id);
+      });
+    });
+  }
+
+  function subscribe(){
+    if(unsub) unsub();
+    editingId = null;
+    unsub = DB.watchCollection(selectEl.value, list=>{ currentList = list; render(); });
+  }
+  selectEl.addEventListener('change', subscribe);
+  subscribe();
+
+  if(clearBtn){
+    clearBtn.addEventListener('click', ()=>{
+      if(confirm('Точно очистить ВСЕ рекорды в выбранной таблице?')){
+        currentList.forEach(r=> DB.deleteItem(selectEl.value, r.id));
+      }
+    });
+  }
+}
+
+/* =========================================================
    КЛИКЕР — РЕДАКТИРОВАНИЕ БАЛАНСОВ ИГРОКОВ
 ========================================================= */
 function mountClickerPlayers(){
@@ -1187,7 +1430,7 @@ function mountAllPlayers(){
   const searchEl = document.getElementById('allPlayersSearch');
   if(!listEl || !window.DB) return;
 
-  const sources = ['profiles', 'clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers'];
+  const sources = ['profiles', 'clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers', 'dronePlayers'];
   const latestByCollection = {};
   const loadedOnce = {};
   let merged = {};
@@ -1336,8 +1579,9 @@ function pickUniqueRandomNickname(excludeId, attempt){
 }
 function deletePlayerEverywhere(id){
   if(!window.DB) return;
-  const OTHER_PROFILE_COLLECTIONS = ['clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers'];
+  const OTHER_PROFILE_COLLECTIONS = ['clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers', 'dronePlayers'];
   OTHER_PROFILE_COLLECTIONS.forEach(col=> DB.deleteItem(col, id));
+  DRONE_LB_COLLECTIONS.forEach(col=> DB.deleteItem(col, id));
   const recordCollections = ['records', ...ALL_RECORD_COLLECTIONS];
   recordCollections.forEach(col=>{
     DB.listOnce(col).then(list=>{
@@ -1367,6 +1611,15 @@ const ALL_RECORD_COLLECTIONS = [
   'snakeRecordsEasy', 'snakeRecordsMedium', 'snakeRecordsHard', 'snakeRecordsOnline',
   'tttRecords'
 ];
+// таблицы рекордов дрона-разведчика хранятся ПО-ДРУГОМУ, чем ALL_RECORD_COLLECTIONS
+// выше (не через addRecordIn, а как обычная коллекция, id записи = id игрока —
+// см. submitOptionRecords() в drone.js), поэтому переименование/удаление игрока
+// в них делается так же, как в OTHER_PROFILE_COLLECTIONS, отдельным списком.
+const DRONE_LB_COLLECTIONS = [
+  'droneLB_model_scout', 'droneLB_model_balanced', 'droneLB_model_heavy',
+  'droneLB_loadout_bomb', 'droneLB_loadout_kamikaze',
+  'droneLB_charge_s', 'droneLB_charge_m', 'droneLB_charge_l'
+];
 function renamePlayerEverywhere(id, newName, seenIn){
   const ts = Date.now();
   const cols = new Set(seenIn || []);
@@ -1388,6 +1641,9 @@ function renamePlayerEverywhere(id, newName, seenIn){
   DB.renameInRecordsByPlayerId(id, newName);
   // и все остальные таблицы рекордов (змейка, Doodle, крестики-нолики…)
   ALL_RECORD_COLLECTIONS.forEach(col=> DB.renameInRecordsInByPlayerId(col, id, newName));
+  // таблицы рекордов дрона (по модели/модулю/заряду) — патчим, только если
+  // у игрока там уже есть запись, чтобы не плодить "призрачные" записи
+  DRONE_LB_COLLECTIONS.forEach(col=> DB.getItemOnce(col, id).then(doc=>{ if(doc) DB.setItem(col, id, { name: newName }); }));
 }
 
 
@@ -1445,7 +1701,18 @@ const DIAG_COLLECTIONS = [
   { name: 'tttPlayers',          label: 'Крестики-нолики: профили игроков' },
   { name: 'tttRecords',          label: 'Крестики-нолики: рекорды' },
   { name: 'tttLobby',            label: 'Крестики-нолики: очередь онлайн-игры' },
-  { name: 'tttGames',            label: 'Крестики-нолики: активные онлайн-партии' }
+  { name: 'tttGames',            label: 'Крестики-нолики: активные онлайн-партии' },
+  { name: 'droneLevels',         label: 'Дрон-разведчик: уровни' },
+  { name: 'droneAchievements',   label: 'Дрон-разведчик: достижения' },
+  { name: 'dronePlayers',        label: 'Дрон-разведчик: профили игроков' },
+  { name: 'droneLB_model_scout',      label: 'Дрон: рекорды — модель Скаут' },
+  { name: 'droneLB_model_balanced',   label: 'Дрон: рекорды — модель Баланс' },
+  { name: 'droneLB_model_heavy',      label: 'Дрон: рекорды — модель Танк' },
+  { name: 'droneLB_loadout_bomb',     label: 'Дрон: рекорды — модуль Бомба' },
+  { name: 'droneLB_loadout_kamikaze', label: 'Дрон: рекорды — модуль Камикадзе' },
+  { name: 'droneLB_charge_s',         label: 'Дрон: рекорды — заряд Малый' },
+  { name: 'droneLB_charge_m',         label: 'Дрон: рекорды — заряд Средний' },
+  { name: 'droneLB_charge_l',         label: 'Дрон: рекорды — заряд Большой' }
 ];
 
 async function runDiagnostics(){
@@ -1500,6 +1767,9 @@ snakeOnlinePlayers, snakeClassicLevels, snakeClassicAchievements,
 snakeClassicPlayers, snakeClassicRecordsEasy, snakeClassicRecordsHard,
 doodleLevels, doodleAchievements, doodlePlayers,
 doodleRecords, doodleSkins, snakeSkins, snakeImageSkins, tttGames, tttLobby,
+droneLevels, droneAchievements, dronePlayers, droneLB_model_scout,
+droneLB_model_balanced, droneLB_model_heavy, droneLB_loadout_bomb,
+droneLB_loadout_kamikaze, droneLB_charge_s, droneLB_charge_m, droneLB_charge_l,
 _ping — по аналогии с тем, как уже разрешены records и news).`;
   } else if(hintEl){
     hintEl.classList.add('hidden');

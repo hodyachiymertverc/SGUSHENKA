@@ -111,6 +111,7 @@
       <button class="admin-tab" data-tab="snake">🟢 Змейка.io</button>
       <button class="admin-tab" data-tab="doodle">🧗 Doodle-прыжки</button>
       <button class="admin-tab" data-tab="ttt">❌⭕ Крестики-нолики</button>
+      <button class="admin-tab" data-tab="drone">🚁 Дрон-разведчик</button>
       <button class="admin-tab" data-tab="allPlayers">👥 Все игроки</button>
     </div>
 
@@ -381,6 +382,42 @@
         <div id="tttAchievementsAddForm"></div>
         <button class="btn btn-primary btn-small" id="tttAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
         <div id="tttAchievementsList" style="margin-top:12px;"></div>
+      </details>
+    </div>
+
+    <!-- ===================== ВКЛАДКА: ДРОН-РАЗВЕДЧИК ===================== -->
+    <div class="admin-tab-panel hidden" data-panel="drone">
+      <div class="admin-card">
+        <h2>🏆 Таблицы рекордов по вылету</h2>
+        <p class="modal-note">Отдельная таблица (игрок, очки, метры, время) на каждый пункт выбора — модель дрона, боевой модуль, заряд батареи. Выбери таблицу ниже, чтобы посмотреть, отредактировать или удалить любую запись.</p>
+        <label class="cfg-field wide">Таблица
+          <select class="text-input" id="droneLBSelect"></select>
+        </label>
+        <button class="btn btn-danger btn-small" id="droneLBClearBtn" style="margin-top:8px;">Очистить выбранную таблицу</button>
+        <div id="droneLBList" style="margin-top:12px;"></div>
+      </div>
+
+      <details class="admin-card" open>
+        <summary><h2 style="display:inline;">🚁 Статистика игроков</h2></summary>
+        <p class="modal-note">Можно изменить никнейм и любую накопленную статистику игрока вручную (очки, дистанция, время, вылеты, подрывы камикадзе).</p>
+        <input class="text-input" id="dronePlayersSearch" placeholder="Поиск по никнейму…" style="margin-top:8px;">
+        <div id="dronePlayersList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">📈 Уровни дрона</h2></summary>
+        <p class="modal-note">Диапазоны считаются от суммарных очков, заработанных за все вылеты. Можно добавлять новые уровни, редактировать и удалять любые существующие.</p>
+        <div id="droneLevelsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="droneLevelsAddBtn" style="margin-top:8px;">+ Добавить уровень</button>
+        <div id="droneLevelsList" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="admin-card">
+        <summary><h2 style="display:inline;">🏆 Достижения дрона</h2></summary>
+        <p class="modal-note">Условие проверяется автоматически по накопленной статистике игрока в игре «Дрон-разведчик». Можно создавать новые достижения, редактировать и удалять любые существующие.</p>
+        <div id="droneAchievementsAddForm"></div>
+        <button class="btn btn-primary btn-small" id="droneAchievementsAddBtn" style="margin-top:8px;">+ Добавить достижение</button>
+        <div id="droneAchievementsList" style="margin-top:12px;"></div>
       </details>
     </div>
   </div>

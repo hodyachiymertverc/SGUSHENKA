@@ -151,7 +151,12 @@ else document.addEventListener('DOMContentLoaded', watchAdminNicknameOverride);
    и только в те игровые коллекции, где запись уже реально есть
    (чтобы не плодить "пустые" записи в играх, в которые игрок ни разу
    не играл). */
-const GAME_PLAYER_COLLECTIONS = ['clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers'];
+const GAME_PLAYER_COLLECTIONS = [
+  'clickerPlayers', 'snakePlayers', 'snakeClassicPlayers', 'doodlePlayers', 'tttPlayers', 'dronePlayers',
+  'droneLB_model_scout', 'droneLB_model_balanced', 'droneLB_model_heavy',
+  'droneLB_loadout_bomb', 'droneLB_loadout_kamikaze',
+  'droneLB_charge_s', 'droneLB_charge_m', 'droneLB_charge_l'
+];
 const GAME_RECORD_COLLECTIONS = [
   'clickerRecords', 'doodleRecords',
   'snakeClassicRecordsEasy', 'snakeClassicRecordsHard',

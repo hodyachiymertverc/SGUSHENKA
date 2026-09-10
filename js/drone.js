@@ -34,23 +34,6 @@ const DRONE_LOADOUTS = {
     kamikaze: { name: 'Камикадзе', bombs: 1, radius: 13, damage: 90, score: 180, oneShot: true },
 };
 /* =========================================================
-   3D-МОДЕЛИ ДРОНОВ И БОЕПРИПАСОВ (GLB, папка /models)
-   ---------------------------------------------------------
-   Для боевого модуля «Бомба» дрон визуально заменяется на
-   модель из папки «drones with a grenade», а сбрасываемый
-   заряд — на модель гранаты оттуда же. Для «Камикадзе»
-   игрок выбирает одну из 4 моделей из папки «kamikaze drones».
-========================================================= */
-const DRONE_GLB_BOMB_LOADOUT = {
-    drone: 'models/drones with a grenade/fpv_drone.glb',
-    bomb: 'models/drones with a grenade/grenade_f1.glb',
-};
-const KAMIKAZE_DRONE_MODELS = {
-    combat: { name: 'Комбат', file: 'models/kamikaze drones/combat__fpv_drone.glb' },
-    fpv: { name: 'FPV дрон', file: 'models/kamikaze drones/fpv_drone.glb' },
-    fpv3d: { name: 'FPV 3D-модель', file: 'models/kamikaze drones/fpv_drone_3d_model.glb' },
-};
-/* =========================================================
    МЕЛКИЕ УТИЛИТЫ
 ========================================================= */
 function droneShow(el) { if (el)
@@ -65,6 +48,17 @@ function droneApproach(current, target, maxDelta) {
 function droneRandRange(a, b) { return a + Math.random() * (b - a); }
 function droneClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 /* =========================================================
+   РЕКОРДЫ ПО КАЖДОМУ ПУНКТУ ВЫБОРА (модель / модуль / заряд) —
+   общая таблица на всех игроков (очки, метры, время), хранится
+   через общий слой DB (см. db.js): одна коллекция на каждое
+   значение пункта выбора, запись = {id: playerId, name, score,
+   distance, time}. Админ может смотреть/редактировать/удалять
+   любую запись в любой из таблиц (см. js/admin.js).
+========================================================= */
+function droneLBCollection(axis, key) {
+    return 'droneLB_' + axis + '_' + key;
+}
+/* =========================================================
    ОСНОВНОЙ ОБЪЕКТ ИГРЫ
 ========================================================= */
 const DroneGame = {
@@ -72,8 +66,6 @@ const DroneGame = {
     selectedModel: 'balanced',
     selectedCharge: 'm',
     selectedLoadout: 'bomb',
-    selectedKamikazeModel: 'combat',
-    _gltfCache: {},
     // ---- three.js ----
     renderer: null,
     scene: null,
@@ -106,7 +98,20 @@ const DroneGame = {
     fx: [], // временные частицы
     score: 0,
     bombsLeft: 5,
-    kamikazeArmed: false,
+    maxBombs: 5,
+    kamikazeHits: 0, // сколько раз подорвался об цель за этот вылет (режим камикадзе)
+    kamikazeTimeLeft: 60, // обратный отсчёт в режиме камикадзе, секунд
+    refueling: false,
+    _bombRefillTimer: 0,
+    // ---- прогресс игрока: уровни/достижения/лидерборды (через db.js) ----
+    playerId: null,
+    _ready: false,
+    levels: [],
+    achievements: [],
+    data: { bestScore: 0, totalScore: 0, bestDistance: 0, totalDistance: 0, bestTime: 0, gamesPlayed: 0, kamikazeHits: 0, unlocked: {} },
+    leaderboards: { model: {}, loadout: {}, charge: {} },
+    _recGroup: 'model',
+    _recKey: 'scout',
     keys: {},
     joyLeft: { active: false, x: 0, y: 0, id: -1 },
     joyRight: { active: false, x: 0, y: 0, id: -1 },
@@ -120,8 +125,11 @@ const DroneGame = {
         this.bindGameUI();
         this.bindKeyboard();
         this.bindJoysticks();
+        this.bindRecordsModal();
+        this.bindAchievementsModal();
         window.addEventListener('resize', () => this.fitCanvas());
         window.addEventListener('orientationchange', () => setTimeout(() => this.fitCanvas(), 200));
+        this.initProgress();
     },
     bindSetupUI() {
         const pickBtn = document.getElementById('pickDroneBtn');
@@ -131,6 +139,7 @@ const DroneGame = {
                 droneShow(document.getElementById('droneScreen'));
                 droneShow(document.getElementById('droneSetupPanel'));
                 droneHide(document.getElementById('droneGameWrap'));
+                this.updateRecordDisplays();
             });
         }
         const backBtn = document.getElementById('droneBackBtn');
@@ -140,39 +149,303 @@ const DroneGame = {
                 droneShow(document.getElementById('gameSelectScreen'));
             });
         }
-        document.querySelectorAll('#droneModelGrid .drone-pick').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('#droneModelGrid .drone-pick').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this.selectedModel = btn.dataset.model || 'balanced';
-            });
-        });
-        document.querySelectorAll('#droneChargeGrid .drone-pick').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('#droneChargeGrid .drone-pick').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this.selectedCharge = btn.dataset.charge || 'm';
-            });
-        });
-        document.querySelectorAll('#droneLoadoutGrid .drone-pick').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('#droneLoadoutGrid .drone-pick').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this.selectedLoadout = btn.dataset.loadout || 'bomb';
-                this.updateKamikazeModelVisibility();
-            });
-        });
-        document.querySelectorAll('#droneKamikazeModelGrid .drone-pick').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('#droneKamikazeModelGrid .drone-pick').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this.selectedKamikazeModel = btn.dataset.kamikazeModel || 'combat';
-            });
-        });
-        this.updateKamikazeModelVisibility();
+        // Три пункта выбора («Модель дрона», «Боевой модуль», «Заряд батареи»)
+        // сделаны разворачивающимися меню: клик по заголовку открывает/закрывает
+        // список вариантов, выбор варианта сворачивает меню обратно.
+        this.bindAccordion('droneModelAccordion', 'droneModelAccordionHeader');
+        this.bindAccordion('droneLoadoutAccordion', 'droneLoadoutAccordionHeader');
+        this.bindAccordion('droneChargeAccordion', 'droneChargeAccordionHeader');
+        this.bindPickGroup('droneModelGrid', 'model', 'selectedModel', 'droneModelAccordion', 'droneModelCurrent', 'balanced');
+        this.bindPickGroup('droneLoadoutGrid', 'loadout', 'selectedLoadout', 'droneLoadoutAccordion', 'droneLoadoutCurrent', 'bomb');
+        this.bindPickGroup('droneChargeGrid', 'charge', 'selectedCharge', 'droneChargeAccordion', 'droneChargeCurrent', 'm');
         const takeoffBtn = document.getElementById('droneTakeoffToSceneBtn');
         if (takeoffBtn)
             takeoffBtn.addEventListener('click', () => this.startFlight());
+        this.updateRecordDisplays();
+    },
+    bindAccordion(accordionId, headerId) {
+        const accordion = document.getElementById(accordionId);
+        const header = document.getElementById(headerId);
+        if (!accordion || !header)
+            return;
+        header.addEventListener('click', () => {
+            accordion.classList.toggle('open');
+        });
+    },
+    bindPickGroup(gridId, dataKey, stateProp, accordionId, currentId, fallback) {
+        const grid = document.getElementById(gridId);
+        if (!grid)
+            return;
+        grid.querySelectorAll('.drone-pick').forEach(btn => {
+            btn.addEventListener('click', () => {
+                grid.querySelectorAll('.drone-pick').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this[stateProp] = btn.dataset[dataKey] || fallback;
+                const nameEl = btn.querySelector('.game-pick-name');
+                const curEl = document.getElementById(currentId);
+                if (curEl && nameEl)
+                    curEl.textContent = nameEl.textContent;
+                // Вкладка выбора нарочно НЕ сворачивается после выбора —
+                // так видно все варианты и их рекорды сразу.
+            });
+        });
+    },
+    /* ---- рекорды по каждому варианту модели/модуля/заряда (личный лучший
+       результат текущего игрока — полная таблица открывается в модалке) ---- */
+    updateRecordDisplays() {
+        const apply = (gridId, axis, dataKey) => {
+            const grid = document.getElementById(gridId);
+            if (!grid)
+                return;
+            grid.querySelectorAll('.drone-pick').forEach(btn => {
+                const key = btn.dataset[dataKey];
+                const el = btn.querySelector('.game-pick-record');
+                if (!el)
+                    return;
+                const list = (this.leaderboards[axis] && this.leaderboards[axis][key]) || [];
+                const mine = this.playerId ? list.find(r => r.id === this.playerId) : null;
+                el.textContent = mine
+                    ? `Рекорд: ${Math.floor(mine.score || 0)} очк · ${Math.floor(mine.distance || 0)} м · ${Math.floor(mine.time || 0)} с`
+                    : 'Рекорд: —';
+            });
+        };
+        apply('droneModelGrid', 'model', 'model');
+        apply('droneLoadoutGrid', 'loadout', 'loadout');
+        apply('droneChargeGrid', 'charge', 'charge');
+    },
+    /* =========================================================
+       ПРОГРЕСС ИГРОКА: уровни, достижения, лидерборды по каждому
+       пункту выбора. Хранится через общий слой DB (см. db.js) —
+       редактируется/удаляется из админ-панели (js/admin.js).
+    ========================================================= */
+    initProgress() {
+        this.playerId = (typeof getPlayerId === 'function') ? getPlayerId() : null;
+        if (!window.DB || !window.DEFAULTS || !this.playerId) {
+            console.warn('DroneGame: DB/DEFAULTS недоступны — уровни, достижения и общие рекорды дрона отключены.');
+            return;
+        }
+        DB.seedIfEmpty('droneLevels', DEFAULTS.droneLevels || []);
+        DB.seedIfEmpty('droneAchievements', DEFAULTS.droneAchievements || []);
+        DB.watchCollection('droneLevels', list => {
+            this.levels = list.slice().sort((a, b) => (a.min || 0) - (b.min || 0));
+            this.renderProgressUI();
+        });
+        DB.watchCollection('droneAchievements', list => {
+            this.achievements = list.slice().sort((a, b) => (a.target || 0) - (b.target || 0));
+            this.renderAchievementsModal();
+            this.checkAchievements();
+        });
+        DB.watchItem('dronePlayers', this.playerId, doc => {
+            this.data = Object.assign({ bestScore: 0, totalScore: 0, bestDistance: 0, totalDistance: 0, bestTime: 0, gamesPlayed: 0, kamikazeHits: 0, unlocked: {} }, doc || {});
+            this._ready = true;
+            this.renderProgressUI();
+            this.renderAchievementsModal();
+            this.checkAchievements();
+        });
+        const axes = {
+            model: Object.keys(DRONE_MODELS),
+            loadout: Object.keys(DRONE_LOADOUTS),
+            charge: Object.keys(DRONE_CHARGES),
+        };
+        Object.keys(axes).forEach(axis => {
+            axes[axis].forEach(key => {
+                DB.watchCollection(droneLBCollection(axis, key), list => {
+                    this.leaderboards[axis][key] = list.slice().sort((a, b) => (b.score || 0) - (a.score || 0));
+                    this.updateRecordDisplays();
+                    this.renderRecordsModalIfOpen();
+                });
+            });
+        });
+        (window.nicknameReady || Promise.resolve()).then(() => {
+            DB.getItemOnce('dronePlayers', this.playerId).then(doc => {
+                if (!doc) {
+                    DB.setItem('dronePlayers', this.playerId, {
+                        name: getNickname(), bestScore: 0, totalScore: 0, bestDistance: 0, totalDistance: 0, bestTime: 0, gamesPlayed: 0, kamikazeHits: 0, unlocked: {}
+                    });
+                }
+                else if (doc.name !== getNickname()) {
+                    DB.setItem('dronePlayers', this.playerId, { name: getNickname() });
+                }
+            });
+        });
+    },
+    getLevelForScore(v) {
+        if (!this.levels.length)
+            return null;
+        let level = this.levels[0];
+        this.levels.forEach(l => { if (v >= l.min)
+            level = l; });
+        return level;
+    },
+    getNextLevel(v) {
+        for (const l of this.levels) {
+            if (v < l.min)
+                return l;
+        }
+        return null;
+    },
+    renderProgressUI() {
+        const badge = document.getElementById('droneLevelBadge');
+        if (!badge)
+            return;
+        const total = this.data.totalScore || 0;
+        const level = this.getLevelForScore(total);
+        if (!level) {
+            droneHide(badge);
+            return;
+        }
+        const next = this.getNextLevel(total);
+        badge.textContent = next
+            ? `${level.emoji || ''} ${level.name || ''} · ${Math.floor(total)}/${next.min} очков до след. уровня`
+            : `${level.emoji || ''} ${level.name || ''} · максимальный уровень`;
+        droneShow(badge);
+    },
+    checkAchievements() {
+        if (!this.achievements.length || !this._ready)
+            return;
+        const unlocked = this.data.unlocked || {};
+        const metric = (type) => {
+            if (type === 'bestScore')
+                return this.data.bestScore || 0;
+            if (type === 'totalScore')
+                return this.data.totalScore || 0;
+            if (type === 'bestDistance')
+                return this.data.bestDistance || 0;
+            if (type === 'totalDistance')
+                return this.data.totalDistance || 0;
+            if (type === 'bestTime')
+                return this.data.bestTime || 0;
+            if (type === 'games')
+                return this.data.gamesPlayed || 0;
+            if (type === 'kamikazeHits')
+                return this.data.kamikazeHits || 0;
+            return 0;
+        };
+        const newly = this.achievements.filter(a => !unlocked[a.id] && metric(a.type) >= (a.target || 0));
+        if (newly.length) {
+            DB.markUnlocked('dronePlayers', this.playerId, newly.map(a => a.id));
+            if (typeof showAchievementToast === 'function')
+                newly.forEach(a => showAchievementToast(a, 'drone'));
+        }
+    },
+    /* ---- лидерборды: обновление личного рекорда по каждому выбранному
+       пункту (модель / боевой модуль / заряд) — очки, метры, время берутся
+       по максимуму независимо друг от друга ---- */
+    submitOptionRecords() {
+        if (!window.DB || !this.playerId)
+            return;
+        const name = (typeof getNickname === 'function') ? getNickname() : 'Игрок';
+        const score = Math.floor(this.score);
+        const distance = Math.floor(this.distance);
+        const time = Math.floor(this.timeAlive);
+        const bump = (axis, key) => {
+            const col = droneLBCollection(axis, key);
+            DB.getItemOnce(col, this.playerId).then(cur => {
+                const prev = cur || { score: 0, distance: 0, time: 0 };
+                DB.setItem(col, this.playerId, {
+                    name,
+                    score: Math.max(prev.score || 0, score),
+                    distance: Math.max(prev.distance || 0, distance),
+                    time: Math.max(prev.time || 0, time),
+                });
+            }).catch(() => { });
+        };
+        bump('model', this.selectedModel);
+        bump('loadout', this.selectedLoadout);
+        bump('charge', this.selectedCharge);
+    },
+    /* ---- модалка «Таблица рекордов»: группы (Модель/Модуль/Заряд), внутри
+       которых отдельная вкладка на каждый вариант — своя таблица игрок/очки/
+       метры/время ---- */
+    bindRecordsModal() {
+        const openBtn = document.getElementById('droneRecordsBtn');
+        const overlay = document.getElementById('droneRecordsOverlay');
+        const closeBtn = document.getElementById('droneRecordsCloseBtn');
+        if (openBtn && overlay)
+            openBtn.addEventListener('click', () => { droneShow(overlay); this.renderRecordsModal(); });
+        if (closeBtn && overlay)
+            closeBtn.addEventListener('click', () => droneHide(overlay));
+    },
+    _recordsGroups() {
+        return [
+            { id: 'model', label: 'Модель дрона', items: [['scout', '🪶 Скаут'], ['balanced', '🚁 Баланс'], ['heavy', '🛡️ Танк']] },
+            { id: 'loadout', label: 'Боевой модуль', items: [['bomb', '💣 Бомба'], ['kamikaze', '💥 Камикадзе']] },
+            { id: 'charge', label: 'Заряд батареи', items: [['s', '🔋 Малый'], ['m', '🔋 Средний'], ['l', '🔋 Большой']] },
+        ];
+    },
+    renderRecordsModalIfOpen() {
+        const overlay = document.getElementById('droneRecordsOverlay');
+        if (overlay && !overlay.classList.contains('hidden'))
+            this.renderRecordsModal();
+    },
+    renderRecordsModal() {
+        const groups = this._recordsGroups();
+        const groupTabsEl = document.getElementById('droneRecGroupTabs');
+        const itemTabsEl = document.getElementById('droneRecItemTabs');
+        const tableWrap = document.getElementById('droneRecordsTableWrap');
+        if (!groupTabsEl || !itemTabsEl || !tableWrap)
+            return;
+        if (!groups.find(g => g.id === this._recGroup))
+            this._recGroup = 'model';
+        groupTabsEl.innerHTML = groups.map(g => `<button type="button" class="drone-rec-tab ${g.id === this._recGroup ? 'active' : ''}" data-group="${g.id}">${g.label}</button>`).join('');
+        groupTabsEl.querySelectorAll('.drone-rec-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this._recGroup = btn.dataset.group;
+                const grp = groups.find(g => g.id === this._recGroup);
+                this._recKey = grp.items[0][0];
+                this.renderRecordsModal();
+            });
+        });
+        const curGroup = groups.find(g => g.id === this._recGroup);
+        if (!curGroup.items.find(([k]) => k === this._recKey))
+            this._recKey = curGroup.items[0][0];
+        itemTabsEl.innerHTML = curGroup.items.map(([key, label]) => `<button type="button" class="drone-rec-tab drone-rec-subtab ${key === this._recKey ? 'active' : ''}" data-key="${key}">${label}</button>`).join('');
+        itemTabsEl.querySelectorAll('.drone-rec-subtab').forEach(btn => {
+            btn.addEventListener('click', () => { this._recKey = btn.dataset.key; this.renderRecordsModal(); });
+        });
+        const list = (this.leaderboards[this._recGroup] && this.leaderboards[this._recGroup][this._recKey]) || [];
+        if (!list.length) {
+            tableWrap.innerHTML = '<p class="news-empty">Пока нет рекордов — стань первым!</p>';
+            return;
+        }
+        const rows = list.slice(0, 30).map((r, i) => `
+            <tr class="${r.id === this.playerId ? 'me' : ''}">
+                <td>${i + 1}</td>
+                <td>${escapeHtml(r.name || 'Игрок')}</td>
+                <td>${Math.floor(r.score || 0)}</td>
+                <td>${Math.floor(r.distance || 0)}</td>
+                <td>${Math.floor(r.time || 0)}</td>
+            </tr>`).join('');
+        tableWrap.innerHTML = `
+            <table class="drone-rec-table">
+                <thead><tr><th>#</th><th>Игрок</th><th>Очки</th><th>Метры (м)</th><th>Время (с)</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    },
+    /* ---- модалка «Достижения» ---- */
+    bindAchievementsModal() {
+        const openBtn = document.getElementById('droneAchievementsBtn');
+        const overlay = document.getElementById('droneAchievementsOverlay');
+        const closeBtn = document.getElementById('droneAchievementsCloseBtn');
+        if (openBtn && overlay)
+            openBtn.addEventListener('click', () => { droneShow(overlay); this.renderAchievementsModal(); });
+        if (closeBtn && overlay)
+            closeBtn.addEventListener('click', () => droneHide(overlay));
+    },
+    renderAchievementsModal() {
+        const overlay = document.getElementById('droneAchievementsOverlay');
+        const grid = document.getElementById('droneAchievementsGrid');
+        if (!grid || !overlay || overlay.classList.contains('hidden'))
+            return;
+        const unlocked = this.data.unlocked || {};
+        grid.innerHTML = this.achievements.map(a => {
+            const done = !!unlocked[a.id];
+            return `<div class="ach-card ${done ? 'unlocked' : 'locked'}">
+                <div class="ach-emoji">${done ? (a.emoji || '🏆') : '🔒'}</div>
+                <div class="ach-title">${escapeHtml(a.title || '')}</div>
+                <div class="ach-desc">${escapeHtml(a.desc || '')}</div>
+            </div>`;
+        }).join('') || '<p class="news-empty">Пока нет достижений.</p>';
     },
     bindGameUI() {
         const exitBtn = document.getElementById('droneExitBtn');
@@ -196,90 +469,6 @@ const DroneGame = {
         const goMenuBtn = document.getElementById('droneGoMenuBtn');
         if (goMenuBtn)
             goMenuBtn.addEventListener('click', () => this.exitToSetup());
-    },
-    updateKamikazeModelVisibility() {
-        const wrap = document.getElementById('droneKamikazeModelWrap');
-        if (!wrap)
-            return;
-        if (this.selectedLoadout === 'kamikaze')
-            droneShow(wrap);
-        else
-            droneHide(wrap);
-    },
-    /* =========================================================
-       ЗАГРУЗКА GLB-МОДЕЛЕЙ (дроны и боеприпасы из папки /models)
-    ========================================================= */
-    loadGLTFModel(path) {
-        if (!this._gltfCache)
-            this._gltfCache = {};
-        if (this._gltfCache[path])
-            return this._gltfCache[path];
-        if (typeof THREE.GLTFLoader === 'undefined') {
-            console.error('[drone] THREE.GLTFLoader не найден — проверь, что js/vendor/GLTFLoader.js подключён в index.html после three.min.js.');
-            return Promise.reject(new Error('GLTFLoader недоступен'));
-        }
-        const loader = new THREE.GLTFLoader();
-        const promise = new Promise((resolve, reject) => {
-            loader.load(encodeURI(path), (gltf) => resolve(gltf.scene), undefined, (err) => {
-                console.error('[drone] Не удалось загрузить 3D-модель:', path, err);
-                reject(err);
-            });
-        });
-        this._gltfCache[path] = promise;
-        return promise;
-    },
-    // Подгоняет размер и центр загруженной GLB-сцены под игровые габариты
-    // и разворачивает её носом по -Z (как у процедурной модели-заглушки).
-    fitGlbVisual(scene, targetSize) {
-        const visual = scene.clone(true);
-        visual.rotation.y = Math.PI;
-        visual.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(visual);
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z) || 1;
-        const fitScale = targetSize / maxDim;
-        visual.scale.setScalar(fitScale);
-        const center = box.getCenter(new THREE.Vector3()).multiplyScalar(fitScale);
-        visual.position.sub(center);
-        return visual;
-    },
-    getSelectedDroneGlbPath() {
-        if (this.selectedLoadout === 'kamikaze') {
-            const km = KAMIKAZE_DRONE_MODELS[this.selectedKamikazeModel] || KAMIKAZE_DRONE_MODELS.combat;
-            return km.file;
-        }
-        return DRONE_GLB_BOMB_LOADOUT.drone;
-    },
-    // Асинхронно подменяет процедурного дрона-заглушку загруженной GLB-моделью.
-    loadDroneVisual(targetGroup, scale) {
-        const path = this.getSelectedDroneGlbPath();
-        this.loadGLTFModel(path).then((scene) => {
-            // сцена могла смениться (рестарт/выход), пока модель качалась
-            if (!this.scene || this.droneGroup !== targetGroup)
-                return;
-            const visual = this.fitGlbVisual(scene, scale * 1.1);
-            targetGroup.children.slice().forEach((c) => targetGroup.remove(c));
-            targetGroup.add(visual);
-            this.rotors = [];
-        }).catch((err) => {
-            // не удалось загрузить модель — остаётся процедурная заглушка
-            console.error('[drone] Визуал дрона не загружен, использую заглушку:', err);
-        });
-    },
-    // Асинхронно подменяет плейсхолдер-сферу бомбы моделью гранаты.
-    attachGrenadeVisual(bombGroup, placeholder) {
-        this.loadGLTFModel(DRONE_GLB_BOMB_LOADOUT.bomb).then((scene) => {
-            if (!bombGroup.parent)
-                return; // бомба уже взорвалась/удалена со сцены
-            const visual = this.fitGlbVisual(scene, 0.42);
-            if (placeholder && placeholder.parent)
-                bombGroup.remove(placeholder);
-            bombGroup.add(visual);
-        }).catch((err) => {
-            // не удалось загрузить модель — остаётся плейсхолдер-сфера
-            console.error('[drone] Модель гранаты не загружена, использую заглушку:', err);
-        });
     },
     setPaused(p) {
         if (!this.running || this.dead)
@@ -408,6 +597,7 @@ const DroneGame = {
     resetFlightState() {
         const model = DRONE_MODELS[this.selectedModel];
         const charge = DRONE_CHARGES[this.selectedCharge];
+        const loadout = DRONE_LOADOUTS[this.selectedLoadout];
         this.maxHp = model.maxHp;
         this.hp = model.maxHp;
         this.battery = 100;
@@ -417,16 +607,31 @@ const DroneGame = {
         this.timeAlive = 0;
         this.distance = 0;
         this.score = 0;
-        this.bombsLeft = DRONE_LOADOUTS[this.selectedLoadout].bombs;
-        this.kamikazeArmed = false;
+        this.maxBombs = loadout.bombs;
+        this.bombsLeft = loadout.bombs;
         this.hasTakenOff = false;
+        this.atBase = false;
+        this.refueling = false;
+        this._bombRefillTimer = 0;
+        this.kamikazeHits = 0;
+        // Камикадзе теперь режим на время: 60 секунд, в течение которых
+        // подрывы об цели не завершают вылет, а просто перезапускают
+        // дрон на базе — см. kamikazeDetonate()/finishKamikazeRun().
+        this.kamikazeTimeLeft = 60;
         const payloadBtn = document.getElementById('droneBombBtn');
         if (payloadBtn) {
-            payloadBtn.disabled = false;
-            payloadBtn.textContent = this.selectedLoadout === 'kamikaze'
-                ? '💥 Активировать камикадзе [B]'
-                : '💣 Сбросить бомбу [B]';
+            if (loadout.oneShot) {
+                // Камикадзе не активируется кнопкой — заряд срабатывает
+                // сам при столкновении, поэтому кнопка сброса тут не нужна.
+                droneHide(payloadBtn);
+            }
+            else {
+                droneShow(payloadBtn);
+                payloadBtn.disabled = false;
+                payloadBtn.textContent = '💣 Сбросить бомбу [B]';
+            }
         }
+        this.hideBaseHint();
         this.hintHidden = false;
     },
     buildScene() {
@@ -459,6 +664,12 @@ const DroneGame = {
         this.bullets = [];
         this.bombs = [];
         this.fx = [];
+        // база возрождения — дрон стартует прямо на ней; вернувшись сюда
+        // и приземлившись, игрок пополняет боезапас бомб (см. update()).
+        this.basePos = { x: 0, z: 26 };
+        this.baseRadius = 7;
+        this.atBase = false;
+        this.addBase();
         // дороги
         const roadXs = [-70, 30, 110];
         const roadMat = new THREE.MeshLambertMaterial({ color: 0x555a5e });
@@ -475,6 +686,8 @@ const DroneGame = {
             if (nearRoad)
                 continue;
             const z = droneRandRange(4, 58);
+            if (Math.hypot(x - this.basePos.x, z - this.basePos.z) < this.baseRadius + 3)
+                continue;
             this.addTree(x, z);
         }
         for (let i = 0; i < 35; i++) {
@@ -508,8 +721,7 @@ const DroneGame = {
             const rx = roadXs[i % roadXs.length];
             this.addTruck(rx, -100 - i * 55, false);
         }
-        // дрон: сначала процедурная заглушка (мгновенно доступна), затем
-        // асинхронно подменяется настоящей GLB-моделью из папки /models.
+        // дрон
         this.droneGroup = this.buildDroneMesh(model.color, model.size);
         this.pos = new THREE.Vector3(0, 0.55, 26);
         this.prevPos = this.pos.clone();
@@ -517,7 +729,6 @@ const DroneGame = {
         this.droneGroup.position.copy(this.pos);
         this.droneGroup.rotation.y = this.yaw;
         scene.add(this.droneGroup);
-        this.loadDroneVisual(this.droneGroup, model.size);
         this.camChasePos = this.pos.clone();
         this.camLookPos = this.pos.clone();
         void charge; // используется через batteryDrainPerSec, но оставим для читаемости
@@ -541,6 +752,38 @@ const DroneGame = {
         tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
         tex.repeat.set(120, 120);
         return tex;
+    },
+    /* ---- база возрождения: посадочная площадка с пополнением бомб ---- */
+    addBase() {
+        const group = new THREE.Group();
+        const pad = new THREE.Mesh(new THREE.CylinderGeometry(this.baseRadius, this.baseRadius, 0.06, 24), new THREE.MeshLambertMaterial({ color: 0x5a5f63 }));
+        pad.position.y = 0.03;
+        group.add(pad);
+        const ring = new THREE.Mesh(new THREE.RingGeometry(this.baseRadius * 0.55, this.baseRadius * 0.68, 24), new THREE.MeshBasicMaterial({ color: 0xffcf4d, side: THREE.DoubleSide }));
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.07;
+        group.add(ring);
+        // буква H по центру площадки — ориентир для посадки
+        const hMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const barL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 2.6), hMat);
+        barL.position.set(-0.9, 0.08, 0);
+        group.add(barL);
+        const barR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 2.6), hMat);
+        barR.position.set(0.9, 0.08, 0);
+        group.add(barR);
+        const barM = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.02, 0.5), hMat);
+        barM.position.set(0, 0.08, 0);
+        group.add(barM);
+        // палатка со складом боеприпасов + антенна для антуража
+        const tent = new THREE.Mesh(new THREE.ConeGeometry(1.6, 1.8, 6), new THREE.MeshLambertMaterial({ color: 0x8a6a45 }));
+        tent.position.set(this.baseRadius + 1.6, 0.9, 0.5);
+        group.add(tent);
+        const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 3, 6), new THREE.MeshLambertMaterial({ color: 0x333333 }));
+        antenna.position.set(this.baseRadius + 1.6, 2.4, -0.6);
+        group.add(antenna);
+        group.position.set(this.basePos.x, 0, this.basePos.z);
+        this.scene.add(group);
+        this.baseGroup = group;
     },
     addTree(x, z) {
         const group = new THREE.Group();
@@ -769,14 +1012,59 @@ const DroneGame = {
             this.timeAlive += dt;
             this.distance += this.pos.distanceTo(this.prevPos);
         }
-        // столкновение с землёй после взлёта
+        // база возрождения: если дрон над ней/на ней — можно приземлиться
+        // и пополнить бомбы + батарею
+        const baseDx = this.pos.x - this.basePos.x;
+        const baseDz = this.pos.z - this.basePos.z;
+        this.atBase = (baseDx * baseDx + baseDz * baseDz) < (this.baseRadius * this.baseRadius);
+        // Приземление НИГДЕ не взрывает дрон — крушение теперь бывает только
+        // от столкновения с деревом/техникой (см. checkObstacleCollisions),
+        // от вражеского огня или от вылета за пределы поля.
         if (this.hasTakenOff && this.pos.y <= 0.5 && this.velVertical <= 0) {
-            this.explode(this.battery <= 0 ? 'Кончился заряд батареи — дрон рухнул' : 'Дрон врезался в землю');
-            return;
+            this.pos.y = 0.5;
+            this.velVertical = 0;
+            this.velForward *= 0.85;
+        }
+        // пополнение бомб и батареи на базе — с анимацией (плавно, не мгновенно)
+        if (this.atBase && this.pos.y <= 1.6) {
+            const needsBattery = this.battery < 100;
+            const needsBombs = this.bombsLeft < this.maxBombs;
+            if (needsBattery || needsBombs) {
+                this.refueling = true;
+                if (needsBattery) {
+                    this.battery = Math.min(100, this.battery + 55 * dt);
+                }
+                if (needsBombs) {
+                    this._bombRefillTimer += dt;
+                    if (this._bombRefillTimer >= 0.5) {
+                        this._bombRefillTimer = 0;
+                        this.bombsLeft = Math.min(this.maxBombs, this.bombsLeft + 1);
+                    }
+                }
+                this.showBaseHint(needsBombs ? '📦 Пополняем бомбы…' : '🔋 Заправляем батарею…');
+            }
+            else {
+                this.refueling = false;
+                this._bombRefillTimer = 0;
+                this.showBaseHint('🏠 Вы на базе — всё готово к вылету!');
+            }
+        }
+        else {
+            this.refueling = false;
+            this._bombRefillTimer = 0;
+            this.hideBaseHint();
+        }
+        // в режиме камикадзе вылет ограничен минутой — очки и метры за это время
+        if (this.selectedLoadout === 'kamikaze') {
+            this.kamikazeTimeLeft = Math.max(0, this.kamikazeTimeLeft - dt);
+            if (this.kamikazeTimeLeft <= 0) {
+                this.finishKamikazeRun();
+                return;
+            }
         }
         // выход за пределы игрового поля
         if (Math.abs(this.pos.x) > 260 || this.pos.z > 90 || this.pos.z < -470) {
-            this.explode('Дрон улетел за пределы зоны полёта');
+            this.handleCrash('Дрон улетел за пределы зоны полёта');
             return;
         }
         this.checkObstacleCollisions(model.size * 0.7);
@@ -786,9 +1074,22 @@ const DroneGame = {
         this.updateCamera(dt);
         this.updateFx(dt);
         this.updateHud();
-        if (this.hp <= 0) {
-            this.explode('Дрон сбит вражеским огнём');
+        if (this.dead)
             return;
+        if (this.hp <= 0) {
+            this.handleCrash('Дрон сбит вражеским огнём');
+            return;
+        }
+    },
+    /* ---- решает, что делать при столкновении/попадании: в режиме
+       камикадзе это подрыв с респауном (вылет продолжается на время),
+       во всех остальных случаях — обычное окончание вылета ---- */
+    handleCrash(reason) {
+        if (this.selectedLoadout === 'kamikaze') {
+            this.kamikazeDetonate(reason);
+        }
+        else {
+            this.explode(reason);
         }
     },
     checkObstacleCollisions(droneRadius) {
@@ -800,7 +1101,7 @@ const DroneGame = {
             const distSq = dx * dx + dz * dz;
             const rr = (o.radius + droneRadius);
             if (distSq < rr * rr && this.pos.y < o.height) {
-                this.explode('Дрон врезался в препятствие');
+                this.handleCrash('Дрон врезался в препятствие');
                 return;
             }
         }
@@ -874,39 +1175,20 @@ const DroneGame = {
             }
         }
     },
-    /* ---- игровая бомба / камикадзе ---- */
+    /* ---- игровая бомба ---- */
     usePayload() {
         if (!this.running || this.paused || this.dead || !this.pos)
             return;
+        const loadout = DRONE_LOADOUTS[this.selectedLoadout];
+        // Камикадзе не активируется кнопкой/клавишей — заряд срабатывает
+        // сам в explode(), как только дрон с чем-нибудь столкнётся.
+        if (loadout.oneShot)
+            return;
         if (this.bombsLeft <= 0)
             return;
-
-        const loadout = DRONE_LOADOUTS[this.selectedLoadout];
         this.bombsLeft--;
-
-        if (loadout.oneShot) {
-            this.kamikazeArmed = true;
-            // Короткий управляемый рывок вперёд и вниз перед детонацией.
-            this.velForward = Math.max(this.velForward, 18);
-            this.velVertical = -Math.max(7, DRONE_MODELS[this.selectedModel].climb * 0.8);
-            const button = document.getElementById('droneBombBtn');
-            if (button) {
-                button.textContent = '💥 Камикадзе активирован';
-                button.disabled = true;
-            }
-            setTimeout(() => {
-                if (!this.dead && this.running && this.kamikazeArmed)
-                    this.payloadExplosion(this.pos.clone(), loadout, true);
-            }, 1100);
-            return;
-        }
-
-        // Обычная бомба отделяется от дрона и падает под действием гравитации.
-        // Визуально это модель гранаты (grenade_f1.glb), которая подгружается
-        // асинхронно поверх плейсхолдер-сферы, чтобы бомба была видна сразу.
-        const mesh = new THREE.Group();
-        const placeholder = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshBasicMaterial({ color: 0x222222 }));
-        mesh.add(placeholder);
+        // Бомба отделяется от дрона и падает под действием гравитации.
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), new THREE.MeshBasicMaterial({ color: 0x222222 }));
         mesh.position.copy(this.pos);
         mesh.position.y -= 0.35;
         this.scene.add(mesh);
@@ -916,7 +1198,7 @@ const DroneGame = {
             life: 5,
             loadout,
         });
-        this.attachGrenadeVisual(mesh, placeholder);
+        this.updateHud();
     },
     updateBombs(dt) {
         for (let i = this.bombs.length - 1; i >= 0; i--) {
@@ -929,18 +1211,14 @@ const DroneGame = {
                 const pos = b.mesh.position.clone();
                 this.scene.remove(b.mesh);
                 this.bombs.splice(i, 1);
-                this.payloadExplosion(pos, b.loadout, false);
+                this.payloadExplosion(pos, b.loadout);
             }
         }
     },
-    payloadExplosion(pos, loadout, selfDestruct) {
-        if (!this.scene)
-            return;
-
-        this.spawnExplosionFx(pos);
+    /* ---- урон по целям в радиусе взрыва (используется бомбой и камикадзе) ---- */
+    applyPayloadDamage(pos, loadout) {
         const radius = loadout.radius;
         let destroyed = 0;
-
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const e = this.enemies[i];
             if (e.destroyed || !e.group)
@@ -965,17 +1243,16 @@ const DroneGame = {
                 }
             }
         }
-
         if (destroyed > 0) {
             this.score += destroyed * loadout.score;
         }
-
-        if (selfDestruct) {
-            this.kamikazeArmed = false;
-            this.explode(destroyed > 0
-                ? `Камикадзе: уничтожено целей — ${destroyed}`
-                : 'Камикадзе: заряд сработал');
-        }
+        return destroyed;
+    },
+    payloadExplosion(pos, loadout) {
+        if (!this.scene)
+            return;
+        this.spawnExplosionFx(pos);
+        this.applyPayloadDamage(pos, loadout);
         this.updateHud();
     },
     updateCamera(dt) {
@@ -987,6 +1264,17 @@ const DroneGame = {
         this.camera.position.copy(this.camChasePos);
         this.camera.lookAt(this.camLookPos.x, this.camLookPos.y + 0.4, this.camLookPos.z);
     },
+    showBaseHint(text) {
+        const el = document.getElementById('droneBaseHint');
+        if (!el)
+            return;
+        if (el.textContent !== text)
+            el.textContent = text;
+        droneShow(el);
+    },
+    hideBaseHint() {
+        droneHide(document.getElementById('droneBaseHint'));
+    },
     updateHud() {
         const hpFill = document.getElementById('droneHpFill');
         if (hpFill)
@@ -995,8 +1283,11 @@ const DroneGame = {
         if (battFill)
             battFill.style.width = Math.max(0, this.battery) + '%';
         const timeEl = document.getElementById('droneTimeValue');
-        if (timeEl)
-            timeEl.textContent = String(Math.floor(this.timeAlive));
+        if (timeEl) {
+            timeEl.textContent = this.selectedLoadout === 'kamikaze'
+                ? String(Math.ceil(this.kamikazeTimeLeft))
+                : String(Math.floor(this.timeAlive));
+        }
         const distEl = document.getElementById('droneDistValue');
         if (distEl)
             distEl.textContent = String(Math.floor(this.distance));
@@ -1010,10 +1301,11 @@ const DroneGame = {
         if (bombsEl)
             bombsEl.textContent = String(this.bombsLeft);
         const payloadBtn = document.getElementById('droneBombBtn');
-        if (payloadBtn && !this.kamikazeArmed) {
+        if (payloadBtn && this.selectedLoadout !== 'kamikaze') {
             payloadBtn.disabled = this.bombsLeft <= 0;
-            if (this.selectedLoadout === 'bomb' && this.bombsLeft <= 0)
-                payloadBtn.textContent = '💣 Заряды закончились';
+            payloadBtn.textContent = this.bombsLeft <= 0
+                ? '🏠 Бомбы кончились — на базу!'
+                : '💣 Сбросить бомбу [B]';
         }
     },
     /* ---- частицы: попадание и взрыв ---- */
@@ -1066,56 +1358,117 @@ const DroneGame = {
         if (typeof SoundManager !== 'undefined' && SoundManager.playBomb)
             SoundManager.playBomb();
         this.droneGroup.visible = false;
-        setTimeout(() => {
-            this.running = false;
-            const reasonEl = document.getElementById('droneDeathReason');
-            if (reasonEl)
-                reasonEl.textContent = reason;
-            const timeEl = document.getElementById('droneFinalTime');
-            if (timeEl)
-                timeEl.textContent = String(Math.floor(this.timeAlive));
-            const distEl = document.getElementById('droneFinalDist');
-            if (distEl)
-                distEl.textContent = String(Math.floor(this.distance));
-            const scoreEl = document.getElementById('droneFinalScore');
-            if (scoreEl)
-                scoreEl.textContent = String(this.score);
-            let best = 0;
+        setTimeout(() => this.finalizeRun(reason), 900);
+    },
+    /* ---- камикадзе: столкновение не убивает — дрон подрывается (урон по
+       площади + очки) и мгновенно возрождается на базе; 60-секундный
+       таймер (см. update()) продолжает тикать без остановки ---- */
+    kamikazeDetonate(reason) {
+        if (this.dead || !this.pos)
+            return;
+        const loadout = DRONE_LOADOUTS.kamikaze;
+        const destroyed = this.applyPayloadDamage(this.pos.clone(), loadout);
+        this.spawnExplosionFx(this.pos.clone());
+        if (typeof SoundManager !== 'undefined' && SoundManager.playBomb)
+            SoundManager.playBomb();
+        this.kamikazeHits += 1;
+        this.showBaseHint(destroyed > 0 ? `💥 Подрыв! Уничтожено целей: ${destroyed}` : '💥 Подрыв!');
+        // возрождение на базе с полным здоровьем — вылет продолжается
+        this.pos.set(this.basePos.x, 0.55, this.basePos.z);
+        this.prevPos.copy(this.pos);
+        this.yaw = Math.PI;
+        this.velForward = 0;
+        this.velVertical = 0;
+        this.hp = this.maxHp;
+        this.battery = 100;
+        if (this.droneGroup) {
+            this.droneGroup.position.copy(this.pos);
+            this.droneGroup.rotation.y = this.yaw;
+            this.droneGroup.visible = true;
+        }
+        this.updateHud();
+    },
+    /* ---- конец 60-секундного вылета в режиме камикадзе (не крушение —
+       просто вышло время) ---- */
+    finishKamikazeRun() {
+        if (this.dead)
+            return;
+        this.dead = true;
+        this.running = false;
+        if (typeof SoundManager !== 'undefined' && SoundManager.playGood)
+            SoundManager.playGood();
+        if (this.droneGroup)
+            this.droneGroup.visible = false;
+        this.finalizeRun(`⏱ Время вышло! Подрывов о цели: ${this.kamikazeHits}`);
+    },
+    /* ---- общий итог вылета: показывает экран результатов, обновляет
+       личный локальный рекорд, копит статистику игрока (уровни/
+       достижения) и обновляет глобальные таблицы рекордов по каждому
+       выбранному пункту (модель / модуль / заряд) ---- */
+    finalizeRun(reason) {
+        this.running = false;
+        const reasonEl = document.getElementById('droneDeathReason');
+        if (reasonEl)
+            reasonEl.textContent = reason;
+        const timeEl = document.getElementById('droneFinalTime');
+        if (timeEl)
+            timeEl.textContent = String(Math.floor(this.timeAlive));
+        const distEl = document.getElementById('droneFinalDist');
+        if (distEl)
+            distEl.textContent = String(Math.floor(this.distance));
+        const scoreEl = document.getElementById('droneFinalScore');
+        if (scoreEl)
+            scoreEl.textContent = String(this.score);
+        let best = 0;
+        try {
+            best = parseFloat(localStorage.getItem('drone_best_distance') || '0') || 0;
+        }
+        catch (e) {
+            best = 0;
+        }
+        let bestScore = 0;
+        try {
+            bestScore = parseFloat(localStorage.getItem('drone_best_score') || '0') || 0;
+        }
+        catch (e) {
+            bestScore = 0;
+        }
+        const newScoreRecord = this.score > bestScore;
+        if (newScoreRecord) {
+            try { localStorage.setItem('drone_best_score', String(Math.floor(this.score))); }
+            catch (e) { /* ignore */ }
+        }
+        const newRecordEl = document.getElementById('droneNewRecordText');
+        if (this.distance > best) {
             try {
-                best = parseFloat(localStorage.getItem('drone_best_distance') || '0') || 0;
+                localStorage.setItem('drone_best_distance', String(Math.floor(this.distance)));
             }
-            catch (e) {
-                best = 0;
-            }
-            let bestScore = 0;
-            try {
-                bestScore = parseFloat(localStorage.getItem('drone_best_score') || '0') || 0;
-            }
-            catch (e) {
-                bestScore = 0;
-            }
-            const newScoreRecord = this.score > bestScore;
-            if (newScoreRecord) {
-                try { localStorage.setItem('drone_best_score', String(Math.floor(this.score))); }
-                catch (e) { /* ignore */ }
-            }
-            const newRecordEl = document.getElementById('droneNewRecordText');
-            if (this.distance > best) {
-                try {
-                    localStorage.setItem('drone_best_distance', String(Math.floor(this.distance)));
-                }
-                catch (e) { /* ignore */ }
-                if (newRecordEl)
-                    droneShow(newRecordEl);
-            }
-            else if (newRecordEl)
-                droneHide(newRecordEl);
-            if (newScoreRecord && newRecordEl) {
-                newRecordEl.textContent = '🎉 Новый рекорд по очкам!';
+            catch (e) { /* ignore */ }
+            if (newRecordEl)
                 droneShow(newRecordEl);
-            }
-            droneShow(document.getElementById('droneGameOverOverlay'));
-        }, 900);
+        }
+        else if (newRecordEl)
+            droneHide(newRecordEl);
+        if (newScoreRecord && newRecordEl) {
+            newRecordEl.textContent = '🎉 Новый рекорд по очкам!';
+            droneShow(newRecordEl);
+        }
+        // таблицы рекордов по каждому пункту выбора (модель / модуль / заряд)
+        this.submitOptionRecords();
+        // накопленная статистика игрока — уровни и достижения дрона
+        if (window.DB && this.playerId) {
+            const patch = { totalScore: this.score, totalDistance: this.distance, gamesPlayed: 1 };
+            if (this.selectedLoadout === 'kamikaze' && this.kamikazeHits > 0)
+                patch.kamikazeHits = this.kamikazeHits;
+            DB.incrementItem('dronePlayers', this.playerId, patch);
+            if (this.score > (this.data.bestScore || 0))
+                DB.setItem('dronePlayers', this.playerId, { bestScore: this.score });
+            if (this.distance > (this.data.bestDistance || 0))
+                DB.setItem('dronePlayers', this.playerId, { bestDistance: this.distance });
+            if (this.timeAlive > (this.data.bestTime || 0))
+                DB.setItem('dronePlayers', this.playerId, { bestTime: this.timeAlive });
+        }
+        droneShow(document.getElementById('droneGameOverOverlay'));
     },
     /* =========================================================
        РЕНДЕР / РАЗМЕР

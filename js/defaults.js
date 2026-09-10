@@ -155,6 +155,27 @@ const DEFAULTS = {
     { id: 'tach5', emoji: '🔥', title: 'Победная серия',  desc: 'Выиграй 3 партии подряд',                   type: 'streak',      target: 3 },
     { id: 'tach6', emoji: '🤝', title: 'Мирная ничья',    desc: 'Сыграй 5 партий вничью',                    type: 'draws',       target: 5 },
     { id: 'tach7', emoji: '💯', title: 'Сто партий',      desc: 'Сыграй 100 партий в крестики-нолики',       type: 'games',       target: 100 }
+  ],
+
+  /* ---- уровни дрона-разведчика (по суммарным очкам за все вылеты) ---- */
+  droneLevels: [
+    { id: 'drlvl1', min: 0,     max: 199,    name: 'Стажёр-оператор', emoji: '🥄' },
+    { id: 'drlvl2', min: 200,   max: 799,    name: 'Пилот-разведчик', emoji: '🚁' },
+    { id: 'drlvl3', min: 800,   max: 2499,   name: 'Ас беспилотник',  emoji: '⚡' },
+    { id: 'drlvl4', min: 2500,  max: 5999,   name: 'Командир звена',  emoji: '👑' },
+    { id: 'drlvl5', min: 6000,  max: 999999, name: 'Легенда неба',    emoji: '🌟' }
+  ],
+
+  /* ---- достижения дрона-разведчика ---- */
+  droneAchievements: [
+    { id: 'drach1', emoji: '🚁', title: 'Первый вылет',      desc: 'Сыграй свою первую игру в «Дрон-разведчик»',    type: 'games',         target: 1 },
+    { id: 'drach2', emoji: '🥫', title: 'Сотня очков',       desc: 'Набери 100 очков за один вылет',                type: 'bestScore',     target: 100 },
+    { id: 'drach3', emoji: '🏆', title: 'Асфальт в огне',    desc: 'Набери 500 очков за один вылет',                type: 'bestScore',     target: 500 },
+    { id: 'drach4', emoji: '📏', title: 'Дальний разведчик', desc: 'Пролети 1000 м за один вылет',                  type: 'bestDistance',  target: 1000 },
+    { id: 'drach5', emoji: '⏱', title: 'Марафон в небе',    desc: 'Продержись в полёте 120 секунд за один вылет',  type: 'bestTime',      target: 120 },
+    { id: 'drach6', emoji: '📈', title: 'Налёт часов',       desc: 'Налетай суммарно 5000 м за все вылеты',         type: 'totalDistance', target: 5000 },
+    { id: 'drach7', emoji: '💥', title: 'Камикадзе-ас',      desc: 'Подорвись об цель в режиме камикадзе 10 раз',   type: 'kamikazeHits',  target: 10 },
+    { id: 'drach8', emoji: '🎮', title: 'Ветеран базы',      desc: 'Сыграй 20 вылетов',                             type: 'games',         target: 20 }
   ]
 };
 
