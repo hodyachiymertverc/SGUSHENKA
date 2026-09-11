@@ -1928,8 +1928,6 @@ const DroneGame = {
         mesh.position.copy(origin);
         this.scene.add(mesh);
         this.bullets.push({ mesh, vel: dir.multiplyScalar(e.bulletSpeed), life: 6, damage: e.bulletDamage, radius: e.kind === 'tank' ? 1.1 : 0.55 });
-        if (typeof SoundManager !== 'undefined' && SoundManager.playBad)
-            SoundManager.playBad();
     },
     updateBullets(dt) {
         for (let i = this.bullets.length - 1; i >= 0; i--) {
@@ -2017,8 +2015,6 @@ const DroneGame = {
                     const points = e.score || 100;
                     this.score += points;
                     this.scene.remove(e.group);
-                    if (typeof SoundManager !== 'undefined' && SoundManager.playGood)
-                        SoundManager.playGood();
                 }
             }
         }
@@ -2134,8 +2130,6 @@ const DroneGame = {
             return;
         this.dead = true;
         this.spawnExplosionFx(this.pos.clone());
-        if (typeof SoundManager !== 'undefined' && SoundManager.playBomb)
-            SoundManager.playBomb();
         this.droneGroup.visible = false;
         setTimeout(() => this.finalizeRun(reason), 900);
     },
@@ -2148,8 +2142,6 @@ const DroneGame = {
         const loadout = DRONE_LOADOUTS.kamikaze;
         const destroyed = this.applyPayloadDamage(this.pos.clone(), loadout);
         this.spawnExplosionFx(this.pos.clone());
-        if (typeof SoundManager !== 'undefined' && SoundManager.playBomb)
-            SoundManager.playBomb();
         this.kamikazeHits += 1;
         this.showBaseHint(destroyed > 0 ? `💥 Подрыв! Уничтожено целей: ${destroyed}` : '💥 Подрыв!');
         // Дрон взорвался: прячем модель и на пару секунд замираем на месте
@@ -2191,8 +2183,6 @@ const DroneGame = {
             return;
         this.dead = true;
         this.running = false;
-        if (typeof SoundManager !== 'undefined' && SoundManager.playGood)
-            SoundManager.playGood();
         if (this.droneGroup)
             this.droneGroup.visible = false;
         this.finalizeRun(`⏱ Время вышло! Подрывов о цели: ${this.kamikazeHits}`);
