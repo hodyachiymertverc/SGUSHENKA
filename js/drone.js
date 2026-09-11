@@ -1315,6 +1315,19 @@ const DroneGame = {
        кустики. Соседние тайлы разворачивают на 180°, чтобы стык не
        читался как явный повтор одной и той же картинки.
     ========================================================= */
+    /* =========================================================
+       БОЛЬШАЯ КАРТА ИЗ ТАЙЛОВ (models/maps/low_poly_forest.glb)
+       ---------------------------------------------------------
+       Одна и та же модель карты клонируется и выстраивается сеткой
+       ПО ВСЕМУ игровому полю (а не только по дальним краям, как было
+       раньше) — иначе игрок с площадки видит только стандартную
+       процедурную землю и решает, что своя карта вообще не подключена.
+       Тайлы кладутся вплотную друг к другу (с небольшим нахлёстом,
+       чтобы не было щелей), кроме зоны прямо у базы/взлётной полосы —
+       её оставляем свободной, чтобы было видно, куда взлетать. Соседние
+       тайлы разворачивают на 180°, чтобы стык не читался как явный
+       повтор одной и той же картинки.
+    ========================================================= */
     buildTiledMapGround() {
         const readyMap = this._readyScenes && this._readyScenes[MAP_GLB_FOREST];
         if (!readyMap) {
@@ -1328,40 +1341,50 @@ const DroneGame = {
             }
             return;
         }
-        const TILE_FIT_SIZE = 42; // целевой макс. габарит одного тайла, мировые единицы
-        // «прощупываем» реальные размеры тайла после подгонки под TILE_FIT_SIZE,
-        // чтобы расставить сетку без щелей и без сильных наложений
-        const probe = this.fitGlbVisual(readyMap, TILE_FIT_SIZE);
+        // Фиксированная сетка на всё поле (а не «сколько влезет по размеру
+        // тайла») — так число копий модели и, значит, нагрузка на видеокарту
+        // предсказуемы независимо от реальных пропорций GLB-файла.
+        const COLS = 6, ROWS = 6;
+        const xFrom = -225, xTo = 225;
+        const zFrom = -430, zTo = 60;
+        this._mapTileStepX = (xTo - xFrom) / (COLS - 1);
+        this._mapTileStepZ = (zTo - zFrom) / (ROWS - 1);
+        // берём тайл чуть крупнее шага сетки — тогда соседние копии
+        // перекрываются краями и швов между ними почти не видно
+        this._mapTileFitSize = Math.max(this._mapTileStepX, this._mapTileStepZ) * 1.4;
+        // измеряем РЕАЛЬНЫЙ габарит одного тайла после подгонки под
+        // _mapTileFitSize — иначе радиус столкновения (нужен для игровой
+        // физики) был бы завязан на шаг сетки, а не на то, что видно на
+        // экране, и дрон бился бы о пустое место рядом с моделью
+        const probe = this.fitGlbVisual(readyMap, this._mapTileFitSize);
         probe.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(probe);
         const size = new THREE.Vector3();
         box.getSize(size);
-        const tileW = Math.max(size.x, 8);
-        const tileD = Math.max(size.z, 8);
-        const overlap = 0.92; // <1 = тайлы чуть перекрываются, склейка без щелей
-        this._mapTileFitSize = TILE_FIT_SIZE;
-        this._mapTileStepX = tileW * overlap;
-        this._mapTileStepZ = tileD * overlap;
-        this._mapTileObstacleRadius = Math.max(tileW, tileD) * 0.42;
-        const colsPerSide = 3; // ширина лесополосы по бокам поля (в тайлах)
-        const zFrom = -440, zTo = 55;
-        const rows = Math.max(1, Math.ceil((zTo - zFrom) / this._mapTileStepZ) + 1);
-        // левая и правая лесополосы — большая склеенная карта по краям поля
-        for (let side = -1; side <= 1; side += 2) {
-            for (let col = 0; col < colsPerSide; col++) {
-                const x = side * (150 + col * this._mapTileStepX);
-                for (let row = 0; row < rows; row++) {
-                    const z = zFrom + row * this._mapTileStepZ;
-                    this.addMapTile(x, z, ((col + row) % 2) * Math.PI);
-                }
+        this._mapTileObstacleRadius = Math.max(Math.min(size.x, size.z) * 0.5, 6);
+        let placed = 0;
+        for (let col = 0; col < COLS; col++) {
+            const x = xFrom + col * this._mapTileStepX;
+            for (let row = 0; row < ROWS; row++) {
+                const z = zFrom + row * this._mapTileStepZ;
+                // не закрываем площадку возрождения и коридор прямо перед ней,
+                // иначе не видно, куда взлетать/садиться
+                const nearBase = Math.hypot(x - this.basePos.x, z - this.basePos.z) < this.baseRadius + this._mapTileStepZ * 0.75;
+                const inTakeoffLane = Math.abs(x - this.basePos.x) < this._mapTileStepX * 0.55 && z > this.basePos.z - 6 && z < zTo + 5;
+                if (nearBase || inTakeoffLane)
+                    continue;
+                this.addMapTile(x, z, ((col + row) % 2) * Math.PI);
+                placed++;
             }
         }
-        // дальняя (тыловая) полоса — соединяет обе стороны в единую большую карту
-        const backSpan = 150 + (colsPerSide - 1) * this._mapTileStepX;
-        const backCols = Math.max(1, Math.ceil((backSpan * 2) / this._mapTileStepX) + 1);
-        for (let col = 0; col < backCols; col++) {
-            const x = -backSpan + col * this._mapTileStepX;
-            this.addMapTile(x, zFrom - this._mapTileStepZ * 0.5, (col % 2) * Math.PI);
+        // подстраховка: если сетка вдруг оказалась вся вырезана (не должно
+        // случиться при текущих числах, но на всякий случай) — хотя бы
+        // старые дальние кластеры, чтобы карта не пропала совсем
+        if (placed === 0) {
+            for (let i = 0; i < 9; i++) {
+                const side = Math.random() < 0.5 ? -1 : 1;
+                this.addMapTile(side * droneRandRange(150, 220), droneRandRange(-420, 40), Math.random() < 0.5 ? Math.PI : 0);
+            }
         }
     },
     // Один тайл склеенной карты — уже готовая (предзагруженная) модель,
