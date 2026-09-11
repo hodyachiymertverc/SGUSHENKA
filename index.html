@@ -256,6 +256,18 @@
         <div class="drone-joystick-stick" id="droneJoyRightStick"></div>
       </div>
 
+      <div id="droneLoadingOverlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2>Загрузка моделей…</h2>
+          <p class="modal-note">Скачиваем 3D-модели техники и карты. Скорость зависит от интернета — при следующих вылетах они уже будут в кэше браузера и загрузятся мгновенно.</p>
+          <div class="drone-loading-bar"><div class="drone-loading-bar-fill" id="droneLoadingBarFill" style="width:0%;"></div></div>
+          <div class="drone-loading-row">
+            <span id="droneLoadingPercent">0%</span>
+            <span id="droneLoadingTimer">0.0 с</span>
+          </div>
+        </div>
+      </div>
+
       <div id="dronePauseOverlay" class="overlay hidden">
         <div class="overlay-card">
           <h2>Пауза</h2>

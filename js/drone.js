@@ -82,6 +82,106 @@ const MACHINE_GLB_CONFIGS = [
     { file: 'models/machine/ukrainian_uaz-469.glb', armed: false, moveMode: 'flee', hp: 28, radius: 1.4, scale: 3.2, fleeSpeed: 14 },
 ];
 /* =========================================================
+   ПОЛНЫЙ СПИСОК ВСЕХ GLB-ФАЙЛОВ ИГРЫ (для предзагрузки перед вылетом)
+   ---------------------------------------------------------
+   Собирается один раз из всех констант выше. Именно по этому списку
+   идёт предзагрузка (см. DroneGame.preloadAllModels): пока не
+   скачается и не распарсится КАЖДАЯ модель отсюда, полёт не
+   начинается — значит, ни одна процедурная заглушка не успевает
+   попасть в кадр.
+========================================================= */
+const ALL_GLB_PATHS = Array.from(new Set([
+    MAP_GLB_FOREST,
+    SOLDIER_GLB,
+    ...TANK_GLB_MODELS,
+    ...HELI_GLB_MODELS,
+    ...MACHINE_GLB_CONFIGS.map((c) => c.file),
+    DRONE_GLB_BOMB_LOADOUT.drone,
+    DRONE_GLB_BOMB_LOADOUT.bomb,
+    ...Object.values(KAMIKAZE_DRONE_MODELS).map((m) => m.file),
+]));
+/* =========================================================
+   КЭШ МОДЕЛЕЙ В БРАУЗЕРЕ (Cache Storage API)
+   ---------------------------------------------------------
+   Каждый .glb скачивается ОДИН РАЗ и сохраняется через нативный
+   браузерный Cache Storage (тот же механизм, что и у service worker,
+   но работает и без него). При повторном заходе — хоть в этом же
+   сеансе, хоть после перезагрузки страницы или через день — файл
+   берётся из этого кэша и вообще не уходит в сеть повторно.
+   Дополнительно результат разбора (THREE.Group) держится в памяти
+   вкладки (DroneGame._readyScenes), чтобы даже разбор GLB не
+   повторялся между вылетами в рамках одной сессии.
+========================================================= */
+const ModelCache = {
+    cacheName: 'sgushenka-glb-v1',
+    _cachePromise: null,
+    _openCache() {
+        if (!this._cachePromise) {
+            this._cachePromise = (typeof caches !== 'undefined')
+                ? caches.open(this.cacheName).catch(() => null)
+                : Promise.resolve(null);
+        }
+        return this._cachePromise;
+    },
+    // Скачивает файл (или берёт из Cache Storage, если уже есть) и
+    // возвращает ArrayBuffer. onProgress(loadedBytes, totalBytes) вызывается
+    // по мере получения данных, если сервер прислал Content-Length.
+    async getArrayBuffer(path, onProgress) {
+        const url = encodeURI(path);
+        const cache = await this._openCache();
+        let response = null;
+        let fromCache = false;
+        if (cache) {
+            try {
+                response = await cache.match(url);
+                fromCache = !!response;
+            }
+            catch (e) {
+                response = null;
+            }
+        }
+        if (!response) {
+            response = await fetch(url);
+            if (!response.ok)
+                throw new Error('HTTP ' + response.status + ' при загрузке ' + path);
+            if (cache) {
+                try {
+                    await cache.put(url, response.clone());
+                }
+                catch (e) {
+                    // хранилище недоступно/переполнено — просто продолжаем без кэша
+                }
+            }
+        }
+        const totalHeader = Number(response.headers.get('content-length')) || 0;
+        if (fromCache || !response.body || typeof response.body.getReader !== 'function') {
+            // Из кэша или без потокового чтения — прогресс по факту, одним скачком.
+            const buf = await response.arrayBuffer();
+            if (onProgress)
+                onProgress(buf.byteLength || 1, buf.byteLength || 1);
+            return buf;
+        }
+        const reader = response.body.getReader();
+        const chunks = [];
+        let received = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done)
+                break;
+            chunks.push(value);
+            received += value.length;
+            if (onProgress)
+                onProgress(received, totalHeader || 0);
+        }
+        const merged = new Uint8Array(received);
+        let offset = 0;
+        chunks.forEach((chunk) => { merged.set(chunk, offset); offset += chunk.length; });
+        if (onProgress)
+            onProgress(received, received);
+        return merged.buffer;
+    },
+};
+/* =========================================================
    МЕЛКИЕ УТИЛИТЫ
 ========================================================= */
 function droneShow(el) { if (el)
@@ -116,6 +216,11 @@ const DroneGame = {
     selectedLoadout: 'bomb',
     selectedKamikazeModel: 'combat',
     _gltfCache: {},
+    // Готовые (уже разобранные) THREE.Group по каждому пути — заполняется
+    // после успешной загрузки. Наличие записи здесь = модель можно
+    // подставить СРАЗУ, синхронно, без плейсхолдера и без ожидания промиса.
+    _readyScenes: {},
+    _preloadDone: false,
     // ---- three.js ----
     renderer: null,
     scene: null,
@@ -227,7 +332,7 @@ const DroneGame = {
         this.updateKamikazeModelVisibility();
         const takeoffBtn = document.getElementById('droneTakeoffToSceneBtn');
         if (takeoffBtn)
-            takeoffBtn.addEventListener('click', () => this.startFlight());
+            takeoffBtn.addEventListener('click', () => this.goToFlightWithPreload());
         this.updateRecordDisplays();
     },
     bindAccordion(accordionId, headerId) {
@@ -531,7 +636,7 @@ const DroneGame = {
             pauseExitBtn.addEventListener('click', () => this.exitToSetup());
         const restartBtn = document.getElementById('droneRestartBtn');
         if (restartBtn)
-            restartBtn.addEventListener('click', () => this.startFlight());
+            restartBtn.addEventListener('click', () => this.goToFlightWithPreload());
         const goMenuBtn = document.getElementById('droneGoMenuBtn');
         if (goMenuBtn)
             goMenuBtn.addEventListener('click', () => this.exitToSetup());
@@ -552,6 +657,7 @@ const DroneGame = {
         this.saveProgressOnExit();
         this.stopLoop();
         this.destroyScene();
+        this.hideLoadingOverlay();
         droneHide(document.getElementById('droneGameWrap'));
         droneShow(document.getElementById('droneSetupPanel'));
         droneHide(document.getElementById('dronePauseOverlay'));
@@ -668,6 +774,59 @@ const DroneGame = {
         base.addEventListener('touchcancel', onEnd, { passive: false });
     },
     /* =========================================================
+       ЭКРАН ЗАГРУЗКИ (таймер + прогресс-бар) — показывается по нажатию
+       «Играть»/«Появиться в лесополосе» и при повторном вылете. Полёт
+       стартует ТОЛЬКО когда все модели из ALL_GLB_PATHS скачаны и
+       разобраны (либо, для тех что не удалось скачать, точно упали —
+       тогда просто останется процедурная заглушка для этой модели).
+       Если всё уже было предзагружено раньше (кэш в памяти вкладки),
+       экран загрузки мелькает почти мгновенно.
+    ========================================================= */
+    goToFlightWithPreload() {
+        droneHide(document.getElementById('droneSetupPanel'));
+        droneShow(document.getElementById('droneGameWrap'));
+        droneHide(document.getElementById('droneGameOverOverlay'));
+        droneHide(document.getElementById('dronePauseOverlay'));
+        this.showLoadingOverlay();
+        this._loadStartTime = performance.now();
+        if (this._loadTimerInterval)
+            clearInterval(this._loadTimerInterval);
+        this._loadTimerInterval = setInterval(() => this.updateLoadingTimerText(), 100);
+        this.updateLoadingProgress(0);
+        this.preloadAllModels((frac) => this.updateLoadingProgress(frac)).then(() => {
+            this.updateLoadingProgress(1);
+            this.hideLoadingOverlay();
+            this.startFlight();
+        });
+    },
+    showLoadingOverlay() {
+        droneShow(document.getElementById('droneLoadingOverlay'));
+    },
+    hideLoadingOverlay() {
+        droneHide(document.getElementById('droneLoadingOverlay'));
+        if (this._loadTimerInterval) {
+            clearInterval(this._loadTimerInterval);
+            this._loadTimerInterval = 0;
+        }
+    },
+    updateLoadingTimerText() {
+        const el = document.getElementById('droneLoadingTimer');
+        if (!el || !this._loadStartTime)
+            return;
+        const seconds = (performance.now() - this._loadStartTime) / 1000;
+        el.textContent = seconds.toFixed(1) + ' с';
+    },
+    updateLoadingProgress(frac) {
+        const pct = Math.round(droneClamp(frac, 0, 1) * 100);
+        const fill = document.getElementById('droneLoadingBarFill');
+        if (fill)
+            fill.style.width = pct + '%';
+        const pctEl = document.getElementById('droneLoadingPercent');
+        if (pctEl)
+            pctEl.textContent = pct + '%';
+        this.updateLoadingTimerText();
+    },
+    /* =========================================================
        ПОСТРОЕНИЕ СЦЕНЫ
     ========================================================= */
     startFlight() {
@@ -741,24 +900,79 @@ const DroneGame = {
     /* =========================================================
        ЗАГРУЗКА GLB-МОДЕЛЕЙ (дроны и боеприпасы из папки /models)
     ========================================================= */
-    loadGLTFModel(path) {
+    loadGLTFModel(path, onProgress) {
         if (!this._gltfCache)
             this._gltfCache = {};
+        if (!this._readyScenes)
+            this._readyScenes = {};
         if (this._gltfCache[path])
             return this._gltfCache[path];
         if (typeof THREE.GLTFLoader === 'undefined') {
             console.error('[drone] THREE.GLTFLoader не найден — проверь, что js/GLTFLoader.js подключён в index.html после three.min.js.');
             return Promise.reject(new Error('GLTFLoader недоступен'));
         }
-        const loader = new THREE.GLTFLoader();
-        const promise = new Promise((resolve, reject) => {
-            loader.load(encodeURI(path), (gltf) => resolve(gltf.scene), undefined, (err) => {
-                console.error('[drone] Не удалось загрузить 3D-модель:', path, err);
-                reject(err);
+        // Скачивание (через кэш браузера) + разбор GLB отдельным шагом —
+        // так один и тот же байтовый кэш работает и здесь, и в preloadAllModels.
+        const promise = ModelCache.getArrayBuffer(path, onProgress).then((buf) => {
+            return new Promise((resolve, reject) => {
+                const loader = new THREE.GLTFLoader();
+                loader.parse(buf, '', (gltf) => resolve(gltf.scene), (err) => {
+                    console.error('[drone] Не удалось разобрать 3D-модель:', path, err);
+                    reject(err);
+                });
             });
+        }).catch((err) => {
+            console.error('[drone] Не удалось загрузить 3D-модель:', path, err);
+            throw err;
         });
+        promise.then((scene) => { this._readyScenes[path] = scene; }).catch(() => { });
         this._gltfCache[path] = promise;
         return promise;
+    },
+    // Предзагружает КАЖДУЮ модель из ALL_GLB_PATHS (см. константу выше).
+    // onProgress(fraction 0..1, doneCount, totalCount) вызывается по ходу
+    // скачивания — на этом строится экран загрузки с таймером/прогресс-баром.
+    // Одна неудачная модель (нет сети, 404 и т.п.) не блокирует остальные —
+    // используется allSettled, а для неё просто останется старая заглушка.
+    preloadAllModels(onProgress) {
+        const paths = ALL_GLB_PATHS;
+        const loaded = {};
+        const total = {};
+        paths.forEach((p) => { loaded[p] = 0; total[p] = 0; });
+        let doneCount = 0;
+        const report = () => {
+            let sumFrac = 0;
+            paths.forEach((p) => {
+                if (total[p] > 0)
+                    sumFrac += Math.min(loaded[p] / total[p], 1);
+                else
+                    sumFrac += loaded[p] > 0 ? 0.5 : 0; // нет content-length — грубая оценка «начал качать»
+            });
+            const frac = paths.length ? sumFrac / paths.length : 1;
+            if (onProgress)
+                onProgress(frac, doneCount, paths.length);
+        };
+        const tasks = paths.map((p) => this.loadGLTFModel(p, (rec, tot) => {
+            loaded[p] = rec;
+            if (tot)
+                total[p] = tot;
+            report();
+        }).then(() => {
+            loaded[p] = total[p] || loaded[p] || 1;
+            total[p] = total[p] || loaded[p];
+        }).catch(() => {
+            // не загрузилось — считаем «дошли до конца» этого пункта, чтобы не
+            // зависать вечно; сцена подставит процедурную заглушку сама
+            loaded[p] = 1;
+            total[p] = 1;
+        }).finally(() => {
+            doneCount++;
+            report();
+        }));
+        report();
+        return Promise.all(tasks).then(() => {
+            this._preloadDone = true;
+        });
     },
     // Подгоняет размер и центр загруженной GLB-сцены под игровые габариты
     // и разворачивает её носом по -Z (как у процедурной модели-заглушки).
@@ -783,48 +997,63 @@ const DroneGame = {
         }
         return DRONE_GLB_BOMB_LOADOUT.drone;
     },
-    // Асинхронно подменяет процедурного дрона-заглушку загруженной GLB-моделью.
+    // Подставляет GLB-модель дрона. Если модель уже готова (обычный случай —
+    // всё предзагружено ДО вылета в droneTakeoffToSceneBtn), подмена происходит
+    // синхронно прямо здесь, и процедурная заглушка не попадает в кадр вообще.
+    // Асинхронная ветка — только подстраховка, если что-то не предзагрузилось.
     loadDroneVisual(targetGroup, scale) {
         const path = this.getSelectedDroneGlbPath();
-        this.loadGLTFModel(path).then((scene) => {
-            // сцена могла смениться (рестарт/выход), пока модель качалась
+        const apply = (scene) => {
             if (!this.scene || this.droneGroup !== targetGroup)
-                return;
+                return; // сцена могла смениться (рестарт/выход), пока модель качалась
             const visual = this.fitGlbVisual(scene, scale * 1.1);
             targetGroup.children.slice().forEach((c) => targetGroup.remove(c));
             targetGroup.add(visual);
             this.rotors = [];
-        }).catch((err) => {
+        };
+        const ready = this._readyScenes && this._readyScenes[path];
+        if (ready) {
+            apply(ready);
+            return;
+        }
+        this.loadGLTFModel(path).then(apply).catch((err) => {
             // не удалось загрузить модель — остаётся процедурная заглушка
             console.error('[drone] Визуал дрона не загружен, использую заглушку:', err);
         });
     },
-    // Асинхронно подменяет плейсхолдер-сферу бомбы моделью гранаты.
+    // Подставляет модель гранаты на бомбу. Синхронно, если уже предзагружена.
     attachGrenadeVisual(bombGroup, placeholder) {
-        this.loadGLTFModel(DRONE_GLB_BOMB_LOADOUT.bomb).then((scene) => {
+        const path = DRONE_GLB_BOMB_LOADOUT.bomb;
+        const apply = (scene) => {
             if (!bombGroup.parent)
                 return; // бомба уже взорвалась/удалена со сцены
             const visual = this.fitGlbVisual(scene, 0.42);
             if (placeholder && placeholder.parent)
                 bombGroup.remove(placeholder);
             bombGroup.add(visual);
-        }).catch((err) => {
+        };
+        const ready = this._readyScenes && this._readyScenes[path];
+        if (ready) {
+            apply(ready);
+            return;
+        }
+        this.loadGLTFModel(path).then(apply).catch((err) => {
             // не удалось загрузить модель — остаётся плейсхолдер-сфера
             console.error('[drone] Модель гранаты не загружена, использую заглушку:', err);
         });
     },
-    // Универсальная асинхронная подмена плейсхолдера реальной GLB-моделью
-    // для любой наземной/воздушной цели (солдат, танк, машина, вертолёт,
-    // кластер леса). Удаляет из targetGroup только явно переданные
-    // плейсхолдер-объекты (opts.removeObjects), не трогая служебные
-    // дочерние объекты вроде точки наведения турели (e.turret).
+    // Универсальная подмена плейсхолдера реальной GLB-моделью для любой
+    // наземной/воздушной цели (солдат, танк, машина, вертолёт). Если модель
+    // уже предзагружена (см. preloadAllModels/_readyScenes) — подмена
+    // синхронная, в тот же кадр, что и создание плейсхолдера, поэтому
+    // заглушка физически не успевает отрисоваться. Удаляет из targetGroup
+    // только явно переданные плейсхолдер-объекты (opts.removeObjects), не
+    // трогая служебные дочерние объекты вроде точки наведения турели.
     attachGlbVisual(targetGroup, path, scale, opts) {
         opts = opts || {};
-        this.loadGLTFModel(path).then((scene) => {
-            // сцена/объект могли исчезнуть (рестарт, выход, уничтожение цели),
-            // пока модель качалась
+        const apply = (scene) => {
             if (!this.scene || !targetGroup.parent)
-                return;
+                return; // сцена/объект могли исчезнуть (рестарт, выход, уничтожение цели)
             const visual = this.fitGlbVisual(scene, scale);
             if (opts.rotationY)
                 visual.rotation.y += opts.rotationY;
@@ -835,7 +1064,13 @@ const DroneGame = {
                 });
             }
             targetGroup.add(visual);
-        }).catch((err) => {
+        };
+        const ready = this._readyScenes && this._readyScenes[path];
+        if (ready) {
+            apply(ready);
+            return;
+        }
+        this.loadGLTFModel(path).then(apply).catch((err) => {
             // не удалось загрузить модель — остаётся процедурная заглушка
             console.error('[drone] Визуал цели не загружен, использую заглушку:', path, err);
         });
@@ -906,14 +1141,10 @@ const DroneGame = {
             if (Math.random() < 0.55)
                 this.addTree(x, z);
         }
-        // декоративные кластеры карты (models/maps/low_poly_forest.glb) —
-        // крупные скопления леса по краям поля, тоже препятствие
-        for (let i = 0; i < 9; i++) {
-            const side = Math.random() < 0.5 ? -1 : 1;
-            const x = side * droneRandRange(150, 232);
-            const z = droneRandRange(-430, 40);
-            this.addForestCluster(x, z);
-        }
+        // карта (models/maps/low_poly_forest.glb), склеенная из многих
+        // тайлов одной и той же модели в одну большую сплошную лесную
+        // зону по краям и в тылу поля — см. buildTiledMapGround()
+        this.buildTiledMapGround();
         // танки — используем все 3 модели из models/tanks, часть стоит на
         // месте, часть медленно патрулирует случайные точки поля
         const tankSpawns = [
@@ -1073,8 +1304,84 @@ const DroneGame = {
         group.scale.setScalar(scale);
         return group;
     },
-    /* ---- декоративный кластер леса из карты (models/maps) ---- */
-    addForestCluster(x, z) {
+    /* =========================================================
+       БОЛЬШАЯ КАРТА ИЗ ТАЙЛОВ (models/maps/low_poly_forest.glb)
+       ---------------------------------------------------------
+       Одна и та же модель карты клонируется и выстраивается сеткой
+       вплотную друг к другу (с небольшим нахлёстом, чтобы не было
+       щелей на стыках), формируя сплошные лесные полосы по обеим
+       сторонам поля и позади него — то есть цельную большую карту,
+       склеенную из многих копий одного файла, а не редкие отдельные
+       кустики. Соседние тайлы разворачивают на 180°, чтобы стык не
+       читался как явный повтор одной и той же картинки.
+    ========================================================= */
+    buildTiledMapGround() {
+        const readyMap = this._readyScenes && this._readyScenes[MAP_GLB_FOREST];
+        if (!readyMap) {
+            // модель почему-то не успела предзагрузиться — не блокируем игру,
+            // используем старое поведение (редкие кластеры + докачка на лету)
+            for (let i = 0; i < 9; i++) {
+                const side = Math.random() < 0.5 ? -1 : 1;
+                const x = side * droneRandRange(150, 232);
+                const z = droneRandRange(-430, 40);
+                this.addForestClusterFallback(x, z);
+            }
+            return;
+        }
+        const TILE_FIT_SIZE = 42; // целевой макс. габарит одного тайла, мировые единицы
+        // «прощупываем» реальные размеры тайла после подгонки под TILE_FIT_SIZE,
+        // чтобы расставить сетку без щелей и без сильных наложений
+        const probe = this.fitGlbVisual(readyMap, TILE_FIT_SIZE);
+        probe.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(probe);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const tileW = Math.max(size.x, 8);
+        const tileD = Math.max(size.z, 8);
+        const overlap = 0.92; // <1 = тайлы чуть перекрываются, склейка без щелей
+        this._mapTileFitSize = TILE_FIT_SIZE;
+        this._mapTileStepX = tileW * overlap;
+        this._mapTileStepZ = tileD * overlap;
+        this._mapTileObstacleRadius = Math.max(tileW, tileD) * 0.42;
+        const colsPerSide = 3; // ширина лесополосы по бокам поля (в тайлах)
+        const zFrom = -440, zTo = 55;
+        const rows = Math.max(1, Math.ceil((zTo - zFrom) / this._mapTileStepZ) + 1);
+        // левая и правая лесополосы — большая склеенная карта по краям поля
+        for (let side = -1; side <= 1; side += 2) {
+            for (let col = 0; col < colsPerSide; col++) {
+                const x = side * (150 + col * this._mapTileStepX);
+                for (let row = 0; row < rows; row++) {
+                    const z = zFrom + row * this._mapTileStepZ;
+                    this.addMapTile(x, z, ((col + row) % 2) * Math.PI);
+                }
+            }
+        }
+        // дальняя (тыловая) полоса — соединяет обе стороны в единую большую карту
+        const backSpan = 150 + (colsPerSide - 1) * this._mapTileStepX;
+        const backCols = Math.max(1, Math.ceil((backSpan * 2) / this._mapTileStepX) + 1);
+        for (let col = 0; col < backCols; col++) {
+            const x = -backSpan + col * this._mapTileStepX;
+            this.addMapTile(x, zFrom - this._mapTileStepZ * 0.5, (col % 2) * Math.PI);
+        }
+    },
+    // Один тайл склеенной карты — уже готовая (предзагруженная) модель,
+    // подставляется сразу синхронно, без плейсхолдера.
+    addMapTile(x, z, extraRotationY) {
+        const readyMap = this._readyScenes && this._readyScenes[MAP_GLB_FOREST];
+        if (!readyMap)
+            return;
+        const group = new THREE.Group();
+        const visual = this.fitGlbVisual(readyMap, this._mapTileFitSize || 42);
+        if (extraRotationY)
+            visual.rotation.y += extraRotationY;
+        group.add(visual);
+        group.position.set(x, 0, z);
+        this.scene.add(group);
+        this.obstacles.push({ x, z, radius: this._mapTileObstacleRadius || 16, height: 14 });
+    },
+    // Резервный путь на случай, если карта не предзагрузилась заранее:
+    // старое поведение — плейсхолдер сразу + докачка модели в фоне.
+    addForestClusterFallback(x, z) {
         const group = new THREE.Group();
         const placeholder = new THREE.Mesh(new THREE.ConeGeometry(3, 6, 7), new THREE.MeshLambertMaterial({ color: 0x2f7a3a }));
         placeholder.position.y = 3;
@@ -1083,7 +1390,6 @@ const DroneGame = {
         group.rotation.y = Math.random() * Math.PI * 2;
         this.scene.add(group);
         this.attachGlbVisual(group, MAP_GLB_FOREST, droneRandRange(20, 30), { removeObjects: [placeholder] });
-        // крупный кластер — широкий радиус коллизии, как у купы деревьев
         this.obstacles.push({ x, z, radius: 9, height: 14 });
     },
     /* ---- враги ---- */
